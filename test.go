@@ -1,8 +1,8 @@
 package main
 
 import (
-	. "relational-badger/db"
-	. "relational-badger/reldb"
+	. "git.haythor.ml/naxxar/relational-badger/db"
+	. "git.haythor.ml/naxxar/relational-badger/reldb"
 )
 
 func main() {
@@ -15,15 +15,15 @@ func main() {
 	_ = db.Insert(&home).Link(locationWrapper.ID)
 }
 
-//region Object declaration
-
-// region Home
+//region Objects declaration
 
 type Home struct {
 	Id       string
 	Name     string
 	Location string
 }
+
+// region Home impl
 
 func (h Home) TableName() string {
 	return NameOfStruct[Home]()
@@ -41,13 +41,13 @@ func (h Home) ToString() string {
 
 //endregion
 
-// region Location
-
 type Location struct {
 	Zip     string
 	City    string
 	Address string
 }
+
+// region Location impl
 
 func (l Location) TableName() string {
 	return NameOfStruct[Location]()

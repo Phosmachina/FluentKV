@@ -1,14 +1,13 @@
 package db
 
 import (
-	. "Relational_Badger/reldb"
 	"bytes"
 	"encoding/gob"
 	"errors"
+	. "git.haythor.ml/naxxar/relational-badger/reldb"
 	"github.com/dgraph-io/badger"
 	"github.com/kataras/golog"
 	"os"
-	. "relational-badger/reldb"
 	"runtime"
 	"strconv"
 	"sync/atomic"

@@ -1,4 +1,4 @@
-module Relational_Badger
+module git.haythor.ml/naxxar/relational-badger
 
 go 1.19
 
