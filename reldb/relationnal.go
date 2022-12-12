@@ -2,10 +2,13 @@ package reldb
 
 import (
 	"errors"
+	"github.com/kataras/golog"
 	"reflect"
 )
 
 type RelDB interface {
+	RawSet(prefix string, key string, value []byte)
+
 	Insert(object *Object) *ObjWrapper
 	Set(id string, object *Object) *ObjWrapper
 	Get(tableName string, id string) *ObjWrapper
@@ -14,7 +17,7 @@ type RelDB interface {
 	DeepDelete(tableName string, id string) error
 	Exist(tableName string, id string) (bool, error)
 
-	Count(tableName string) (int, error)
+	Count(tableName string) int
 	Foreach(tableName string, do func(objWrapper ObjWrapper)) error
 	FindFirst(tableName string, predicate func(objWrapper ObjWrapper) bool) (*ObjWrapper, error)
 	FindAll(tableName string, predicate func(objWrapper ObjWrapper) bool) ([]*ObjWrapper, error)
@@ -29,17 +32,27 @@ type Object interface {
 }
 
 type ObjWrapper struct {
-	db    *RelDB
+	db    RelDB
 	ID    string
 	Value *Object
 }
 
-func NewObjWrapper() *ObjWrapper {
-	return &ObjWrapper{}
+func NewObjWrapper(db RelDB, value *Object) *ObjWrapper {
+	return &ObjWrapper{db: db, Value: value}
 }
 
-func (t *ObjWrapper) Link(ids ...string) error {
-
+func (t *ObjWrapper) Link(tableName string, ids ...string) error {
+	for _, id := range ids {
+		exist, err := t.db.Exist(tableName, id)
+		if err != nil {
+			return err
+		}
+		if !exist {
+			golog.Warnf("Id '%s' not found and cannot be link.", id)
+			continue
+		}
+		// TODO insert link to db
+	}
 	return nil
 }
 
@@ -47,19 +60,19 @@ func (t *ObjWrapper) LinkNew(objs ...*Object) error {
 	return nil
 }
 
-func (t *ObjWrapper) DirectionalLink(ids ...string) error {
+func (t *ObjWrapper) DirectionalLink(tableName string, ids ...string) error {
 	return nil
 }
 
-func (t *ObjWrapper) DirectionalLinkNew(objs ...*Object) error {
+func (t *ObjWrapper) DirectionalLinkNew(tableName string, objs ...*Object) error {
 	return nil
 }
 
-func (t *ObjWrapper) FromLink(objType string, id string) *ObjWrapper {
+func (t *ObjWrapper) FromLink(tableName string, id string) *ObjWrapper {
 	return nil
 }
 
-func (t *ObjWrapper) AllFromLink(objType string) []*ObjWrapper {
+func (t *ObjWrapper) AllFromLink(tableName string) []*ObjWrapper {
 	return nil
 }
 

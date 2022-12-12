@@ -1,15 +1,18 @@
 package main
 
 import (
-	. "Relational_Badger/db"
-	. "Relational_Badger/reldb"
+	. "relational-badger/db"
+	. "relational-badger/reldb"
 )
 
 func main() {
-	var db RelDB = NewBadgerDB()
+	db, _ := NewBadgerDB("data")
 
 	location := Object(Location{})
-	db.Insert(&location).Link("1", "2")
+	locationWrapper := db.Insert(&location)
+	locationWrapper.AllFromLink(Type[Location]().TableName())
+	home := Object(Home{})
+	_ = db.Insert(&home).Link(locationWrapper.ID)
 }
 
 //region Object declaration
