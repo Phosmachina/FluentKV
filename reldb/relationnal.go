@@ -1,82 +1,92 @@
 package reldb
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
 	"github.com/kataras/golog"
 	"reflect"
 )
 
-type RelDB interface {
-	RawSet(prefix string, key string, value []byte)
+var (
+	AutoKeyBuffer = 100
 
-	Insert(object *Object) *ObjWrapper
-	Set(id string, object *Object) *ObjWrapper
+	PreAutoKavlb = "tank%avlb_"
+	PreAutoKused = "tank%used_"
+	PrefixLink   = "link%"
+	PrefixTable  = "tbl%"
+
+	Delimiter     = "_"
+	LinkDelimiter = "@"
+)
+
+type IRelationalDB interface {
+	GetNextKey() string
+	FreeKey(key ...string) []error
+	CleanUnusedKey()
+
+	RawSet(prefix string, key string, value []byte)
+	RawGet(prefix string, key string) ([]byte, bool)
+	RawDelete(prefix string, key string) bool
+	RawIterKey(prefix string, action func(key string) (stop bool))
+	RawIterKV(prefix string, action func(key string, value []byte) (stop bool))
+
+	Insert(object *IObject) *ObjWrapper
+	Set(id string, object *IObject) *ObjWrapper
 	Get(tableName string, id string) *ObjWrapper
 	Update(tableName string, id string, editor func(objWrapper *ObjWrapper)) *ObjWrapper
 	Delete(tableName string, id string) error
 	DeepDelete(tableName string, id string) error
-	Exist(tableName string, id string) (bool, error)
+	Exist(tableName string, id string) bool
 
 	Count(tableName string) int
-	Foreach(tableName string, do func(objWrapper ObjWrapper)) error
-	FindFirst(tableName string, predicate func(objWrapper ObjWrapper) bool) (*ObjWrapper, error)
-	FindAll(tableName string, predicate func(objWrapper ObjWrapper) bool) ([]*ObjWrapper, error)
+	Foreach(tableName string, do func(objWrapper ObjWrapper))
+	FindFirst(tableName string, predicate func(objWrapper ObjWrapper) bool) *ObjWrapper
+	FindAll(tableName string, predicate func(objWrapper ObjWrapper) bool) []*ObjWrapper
 
 	Print(tableName string) error
 }
 
-type Object interface {
-	Hash() string
-	ToString() string
-	TableName() string
-}
-
-type ObjWrapper struct {
-	db    RelDB
-	ID    string
-	Value *Object
-}
-
-func NewObjWrapper(db RelDB, value *Object) *ObjWrapper {
-	return &ObjWrapper{db: db, Value: value}
-}
-
-func (t *ObjWrapper) Link(tableName string, ids ...string) error {
-	for _, id := range ids {
-		exist, err := t.db.Exist(tableName, id)
-		if err != nil {
-			return err
-		}
-		if !exist {
-			golog.Warnf("Id '%s' not found and cannot be link.", id)
-			continue
-		}
-		// TODO insert link to db
-	}
-	return nil
-}
-
-func (t *ObjWrapper) LinkNew(objs ...*Object) error {
-	return nil
-}
-
-func (t *ObjWrapper) DirectionalLink(tableName string, ids ...string) error {
-	return nil
-}
-
-func (t *ObjWrapper) DirectionalLinkNew(tableName string, objs ...*Object) error {
-	return nil
-}
-
-func (t *ObjWrapper) FromLink(tableName string, id string) *ObjWrapper {
-	return nil
-}
-
-func (t *ObjWrapper) AllFromLink(tableName string) []*ObjWrapper {
-	return nil
-}
-
 //region Helpers
+
+func MakePrefix(tableName string) string {
+	return PrefixTable + tableName + Delimiter
+}
+
+func MakeKey(tableName, id string) []byte {
+	return []byte(MakePrefix(tableName) + id)
+}
+
+func MakeLinkKey(obj *ObjWrapper, targetName string, targetId string) []string {
+	k1 := (*obj.Value).TableName()
+	k2 := targetName + Delimiter + targetId
+	return []string{k1 + LinkDelimiter + k2, k2 + LinkDelimiter + k1}
+}
+
+func Encode(obj *IObject) []byte {
+	buffer := bytes.Buffer{}
+	err := gob.NewEncoder(&buffer).Encode(obj)
+	if err != nil {
+		golog.Error(err)
+		return nil
+	}
+	return buffer.Bytes()
+}
+
+func Decode(value []byte) *IObject {
+	buffer := bytes.Buffer{}
+	var object *IObject
+	buffer.Write(value)
+	err := gob.NewDecoder(&buffer).Decode(object)
+	if err != nil {
+		golog.Error(err)
+	}
+	return object
+}
+
+//endregion
+
+//region Utils
 
 func NameOfStruct[T any]() string {
 	return reflect.TypeOf((*T)(nil)).Elem().Name()
@@ -94,7 +104,7 @@ func NameOfField(parent interface{}, field interface{}) (string, error) {
 	return "", errors.New("invalid parameters")
 }
 
-func Type[T Object]() *T {
+func Type[T IObject]() *T {
 	return (*T)(nil)
 }
 
