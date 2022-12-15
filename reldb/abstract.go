@@ -3,6 +3,7 @@ package reldb
 import (
 	"errors"
 	"strconv"
+	"strings"
 )
 
 // AbstractRelDB pre-implement IRelationalDB,
@@ -49,12 +50,12 @@ func (db *AbstractRelDB) Insert(object *IObject) *ObjWrapper {
 }
 
 func (db *AbstractRelDB) Set(id string, object *IObject) *ObjWrapper {
-	db.RawSet((*object).TableName(), id, Encode(object))
+	db.RawSet(MakePrefix((*object).TableName()), id, Encode(object))
 	return NewObjWrapper(db, id, object)
 }
 
 func (db *AbstractRelDB) Get(tableName string, id string) *ObjWrapper {
-	value, found := db.RawGet(tableName, id)
+	value, found := db.RawGet(MakePrefix(tableName), id)
 	if found {
 		return NewObjWrapper(db, id, Decode(value))
 	} else {
@@ -63,7 +64,7 @@ func (db *AbstractRelDB) Get(tableName string, id string) *ObjWrapper {
 }
 
 func (db *AbstractRelDB) Update(tableName string, id string, editor func(objWrapper *ObjWrapper)) *ObjWrapper {
-	objWrapper := db.Get(tableName, id)
+	objWrapper := db.Get(MakePrefix(tableName), id)
 	if objWrapper == nil {
 		return nil
 	}
@@ -73,13 +74,38 @@ func (db *AbstractRelDB) Update(tableName string, id string, editor func(objWrap
 }
 
 func (db *AbstractRelDB) Delete(tableName string, id string) error {
-	//TODO implement me
-	panic("implement me")
+	if !db.RawDelete(MakePrefix(tableName), id) {
+		return errors.New("invalid id") // TODO uniformize error
+	}
+	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		for _, s := range strings.Split(key, LinkDelimiter) {
+			tnAndId := strings.Split(s, Delimiter)
+			if tnAndId[0] == tableName && tnAndId[1] == id {
+				db.RawDelete(PrefixLink, key)
+			}
+		}
+		return false
+	})
+	return nil
 }
 
 func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
-	//TODO implement me
-	panic("implement me")
+	if !db.RawDelete(MakePrefix(tableName), id) {
+		return errors.New("invalid id") // TODO uniformize error
+	}
+	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		split := strings.Split(key, LinkDelimiter)
+		tnAndIdK1 := strings.Split(split[0], Delimiter)
+		tnAndIdK2 := strings.Split(split[1], Delimiter)
+		if tnAndIdK1[0] == tableName && tnAndIdK1[1] == id {
+			db.RawDelete(PrefixLink, key)
+			_ = db.DeepDelete(tnAndIdK2[0], tnAndIdK2[1])
+		} else if tnAndIdK2[0] == tableName && tnAndIdK2[1] == id {
+			db.RawDelete(PrefixLink, key)
+		}
+		return false
+	})
+	return nil
 }
 
 func (db *AbstractRelDB) Count(tableName string) int {
@@ -99,11 +125,27 @@ func (db *AbstractRelDB) Foreach(tableName string, do func(objWrapper ObjWrapper
 }
 
 func (db *AbstractRelDB) FindFirst(tableName string, predicate func(objWrapper ObjWrapper) bool) *ObjWrapper {
-	//TODO implement me
-	panic("implement me")
+	var result *ObjWrapper = nil
+	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
+		objWrapper := NewObjWrapper(db, key, Decode(value))
+		if predicate(*objWrapper) {
+			result = objWrapper
+			return true
+		}
+		return false
+	})
+	return result
 }
 
 func (db *AbstractRelDB) FindAll(tableName string, predicate func(objWrapper ObjWrapper) bool) []*ObjWrapper {
-	//TODO implement me
-	panic("implement me")
+	var result []*ObjWrapper
+	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
+		objWrapper := NewObjWrapper(db, key, Decode(value))
+		if predicate(*objWrapper) {
+			result = append(result, objWrapper)
+		}
+		return false
+	})
+	return result
+
 }
