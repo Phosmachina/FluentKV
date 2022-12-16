@@ -18,9 +18,9 @@ func (db *AbstractRelDB) GetNextKey() string {
 			db.RawSet(PreAutoKavlb, strconv.Itoa(i), nil)
 		}
 	}
-	db.RawIterKey(MakePrefix(PreAutoKavlb), func(k string) (stop bool) { // Get next key.
+	db.RawIterKey(PreAutoKavlb, func(k string) (stop bool) { // Get next key.
 		key = k
-		_ = db.Delete(PreAutoKavlb, k)
+		_ = db.RawDelete(PreAutoKavlb, k)
 		return true
 	})
 	return key
@@ -43,15 +43,15 @@ func (db *AbstractRelDB) CleanUnusedKey() {
 	panic("implement me")
 }
 
-func (db *AbstractRelDB) Insert(object *IObject) *ObjWrapper {
-	objWrapper := NewObjWrapper(db, db.GetNextKey(), object)
-	db.RawSet((*object).TableName(), objWrapper.ID, Encode(object))
+func (db *AbstractRelDB) Insert(object IObject) *ObjWrapper {
+	objWrapper := NewObjWrapper(db, db.GetNextKey(), &object)
+	db.RawSet(MakePrefix(object.TableName()), objWrapper.ID, Encode(&object))
 	return objWrapper
 }
 
-func (db *AbstractRelDB) Set(id string, object *IObject) *ObjWrapper {
-	db.RawSet(MakePrefix((*object).TableName()), id, Encode(object))
-	return NewObjWrapper(db, id, object)
+func (db *AbstractRelDB) Set(id string, object IObject) *ObjWrapper {
+	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+	return NewObjWrapper(db, id, &object)
 }
 
 func (db *AbstractRelDB) Get(tableName string, id string) *ObjWrapper {
@@ -77,6 +77,7 @@ func (db *AbstractRelDB) Delete(tableName string, id string) error {
 	if !db.RawDelete(MakePrefix(tableName), id) {
 		return errors.New("invalid id") // TODO uniformize error
 	}
+	db.FreeKey(id)
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		for _, s := range strings.Split(key, LinkDelimiter) {
 			tnAndId := strings.Split(s, Delimiter)
@@ -93,6 +94,7 @@ func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
 	if !db.RawDelete(MakePrefix(tableName), id) {
 		return errors.New("invalid id") // TODO uniformize error
 	}
+	db.FreeKey(id)
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		split := strings.Split(key, LinkDelimiter)
 		tnAndIdK1 := strings.Split(split[0], Delimiter)
@@ -108,9 +110,9 @@ func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
 	return nil
 }
 
-func (db *AbstractRelDB) Count(tableName string) int {
+func (db *AbstractRelDB) Count(prefix string) int {
 	var ct = 0
-	db.RawIterKey(MakePrefix(tableName), func(key string) (stop bool) {
+	db.RawIterKey(prefix, func(key string) (stop bool) {
 		ct++
 		return false
 	})

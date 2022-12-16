@@ -72,7 +72,7 @@ var iterOptionsNoValues = badger.IteratorOptions{
 
 func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
 	err := db.Service.Update(func(txn *badger.Txn) error {
-		return txn.SetEntry(badger.NewEntry(MakeKey(prefix, key), value))
+		return txn.SetEntry(badger.NewEntry([]byte(prefix+key), value))
 	})
 	if err != nil {
 		golog.Error(err)
@@ -82,7 +82,7 @@ func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
 func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 	var value []byte
 	err := db.Service.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(MakeKey(prefix, key))
+		item, err := txn.Get([]byte(prefix + key))
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 
 func (db *BadgerDB) RawDelete(prefix string, key string) bool {
 	txn := db.Service.NewTransaction(true)
-	err := txn.Delete(MakeKey(prefix, key))
+	err := txn.Delete([]byte(prefix + key))
 	if err != nil {
 		golog.Error(err)
 		return false

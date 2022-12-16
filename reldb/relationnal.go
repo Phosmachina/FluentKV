@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"github.com/kataras/golog"
 	"reflect"
 )
@@ -31,8 +32,8 @@ type IRelationalDB interface {
 	RawIterKey(prefix string, action func(key string) (stop bool))
 	RawIterKV(prefix string, action func(key string, value []byte) (stop bool))
 
-	Insert(object *IObject) *ObjWrapper
-	Set(id string, object *IObject) *ObjWrapper
+	Insert(object IObject) *ObjWrapper
+	Set(id string, object IObject) *ObjWrapper
 	Get(tableName string, id string) *ObjWrapper
 	Update(tableName string, id string, editor func(objWrapper *ObjWrapper)) *ObjWrapper
 	Delete(tableName string, id string) error
@@ -58,7 +59,7 @@ func MakeKey(tableName, id string) []byte {
 }
 
 func MakeLinkKey(obj *ObjWrapper, targetName string, targetId string) []string {
-	k1 := (*obj.Value).TableName()
+	k1 := obj.Value.TableName() + Delimiter + obj.ID
 	k2 := targetName + Delimiter + targetId
 	return []string{k1 + LinkDelimiter + k2, k2 + LinkDelimiter + k1}
 }
@@ -75,13 +76,14 @@ func Encode(obj *IObject) []byte {
 
 func Decode(value []byte) *IObject {
 	buffer := bytes.Buffer{}
-	var object *IObject
+	var object IObject
 	buffer.Write(value)
-	err := gob.NewDecoder(&buffer).Decode(object)
+	err := gob.NewDecoder(&buffer).Decode(&object)
 	if err != nil {
 		golog.Error(err)
 	}
-	return object
+	v := IObject(NewAbstractObject(object))
+	return &v
 }
 
 //endregion
@@ -106,6 +108,17 @@ func NameOfField(parent interface{}, field interface{}) (string, error) {
 
 func Type[T IObject]() *T {
 	return (*T)(nil)
+}
+
+func ToString(v any) string {
+	typeOf := reflect.TypeOf(v)
+	result := typeOf.Name()
+	value := reflect.ValueOf(v)
+	for i := 0; i < typeOf.NumField(); i++ {
+		field := typeOf.Field(i)
+		result += fmt.Sprintf(" | %s: %v", field.Name, value.Field(i))
+	}
+	return result
 }
 
 //endregion
