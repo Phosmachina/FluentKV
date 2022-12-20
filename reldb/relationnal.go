@@ -21,6 +21,9 @@ var (
 	LinkDelimiter = "@"
 )
 
+// IRelationalDB
+// Key: internalTypePrefix, suffix
+// Key for concrete type : internalTypePrefix, tableName, id
 type IRelationalDB interface {
 	GetNextKey() string
 	FreeKey(key ...string) []error
@@ -32,18 +35,18 @@ type IRelationalDB interface {
 	RawIterKey(prefix string, action func(key string) (stop bool))
 	RawIterKV(prefix string, action func(key string, value []byte) (stop bool))
 
-	Insert(object IObject) *ObjWrapper
-	Set(id string, object IObject) *ObjWrapper
-	Get(tableName string, id string) *ObjWrapper
-	Update(tableName string, id string, editor func(objWrapper *ObjWrapper)) *ObjWrapper
+	Insert(object IObject) string
+	Set(id string, object IObject) error
+	Get(tableName string, id string) *IObject
+	Update(tableName string, id string, editor func(value IObject) IObject) *IObject
 	Delete(tableName string, id string) error
 	DeepDelete(tableName string, id string) error
 	Exist(tableName string, id string) bool
 
 	Count(tableName string) int
-	Foreach(tableName string, do func(objWrapper ObjWrapper))
-	FindFirst(tableName string, predicate func(objWrapper ObjWrapper) bool) *ObjWrapper
-	FindAll(tableName string, predicate func(objWrapper ObjWrapper) bool) []*ObjWrapper
+	Foreach(tableName string, do func(id string, value *IObject))
+	FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject)
+	FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject)
 
 	Print(tableName string) error
 }
@@ -58,8 +61,8 @@ func MakeKey(tableName, id string) []byte {
 	return []byte(MakePrefix(tableName) + id)
 }
 
-func MakeLinkKey(obj *ObjWrapper, targetName string, targetId string) []string {
-	k1 := obj.Value.TableName() + Delimiter + obj.ID
+func MakeLinkKey(tableName string, id string, targetName string, targetId string) []string {
+	k1 := tableName + Delimiter + id
 	k2 := targetName + Delimiter + targetId
 	return []string{k1 + LinkDelimiter + k2, k2 + LinkDelimiter + k1}
 }
@@ -76,14 +79,13 @@ func Encode(obj *IObject) []byte {
 
 func Decode(value []byte) *IObject {
 	buffer := bytes.Buffer{}
-	var object IObject
+	var object *IObject
 	buffer.Write(value)
 	err := gob.NewDecoder(&buffer).Decode(&object)
 	if err != nil {
 		golog.Error(err)
 	}
-	v := IObject(NewAbstractObject(object))
-	return &v
+	return object
 }
 
 //endregion

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 // AbstractRelDB pre-implement IRelationalDB,
@@ -43,34 +44,37 @@ func (db *AbstractRelDB) CleanUnusedKey() {
 	panic("implement me")
 }
 
-func (db *AbstractRelDB) Insert(object IObject) *ObjWrapper {
-	objWrapper := NewObjWrapper(db, db.GetNextKey(), &object)
-	db.RawSet(MakePrefix(object.TableName()), objWrapper.ID, Encode(&object))
-	return objWrapper
-}
-
-func (db *AbstractRelDB) Set(id string, object IObject) *ObjWrapper {
+func (db *AbstractRelDB) Insert(object IObject) string {
+	id := db.GetNextKey()
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
-	return NewObjWrapper(db, id, &object)
+	return id
 }
 
-func (db *AbstractRelDB) Get(tableName string, id string) *ObjWrapper {
+func (db *AbstractRelDB) Set(id string, object IObject) error {
+	if !db.Exist(object.TableName(), id) {
+		return errors.New("") // TODO uniformize error
+	}
+	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+	return nil
+}
+
+func (db *AbstractRelDB) Get(tableName string, id string) *IObject {
 	value, found := db.RawGet(MakePrefix(tableName), id)
 	if found {
-		return NewObjWrapper(db, id, Decode(value))
+		return Decode(value)
 	} else {
 		return nil
 	}
 }
 
-func (db *AbstractRelDB) Update(tableName string, id string, editor func(objWrapper *ObjWrapper)) *ObjWrapper {
-	objWrapper := db.Get(MakePrefix(tableName), id)
-	if objWrapper == nil {
+func (db *AbstractRelDB) Update(tableName string, id string, editor func(value IObject) IObject) *IObject {
+	value := db.Get(tableName, id)
+	if value == nil {
 		return nil
 	}
-	editor(objWrapper)
-	db.Set(id, objWrapper.Value)
-	return objWrapper
+	edited := editor(*value)
+	_ = db.Set(id, edited)
+	return &edited
 }
 
 func (db *AbstractRelDB) Delete(tableName string, id string) error {
@@ -119,35 +123,122 @@ func (db *AbstractRelDB) Count(prefix string) int {
 	return ct
 }
 
-func (db *AbstractRelDB) Foreach(tableName string, do func(objWrapper ObjWrapper)) {
+func (db *AbstractRelDB) Foreach(tableName string, do func(id string, value *IObject)) {
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		do(*NewObjWrapper(db, key, Decode(value)))
+		do(key, Decode(value))
 		return false
 	})
 }
 
-func (db *AbstractRelDB) FindFirst(tableName string, predicate func(objWrapper ObjWrapper) bool) *ObjWrapper {
-	var result *ObjWrapper = nil
-	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		objWrapper := NewObjWrapper(db, key, Decode(value))
-		if predicate(*objWrapper) {
-			result = objWrapper
+func (db *AbstractRelDB) FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject) {
+	var resultId = ""
+	var resultValue *IObject
+	db.RawIterKV(MakePrefix(tableName), func(curId string, value []byte) (stop bool) {
+		tmpObj := Decode(value)
+		if predicate(curId, tmpObj) {
+			resultId = curId
+			resultValue = tmpObj
 			return true
 		}
 		return false
 	})
-	return result
+	return resultId, resultValue
 }
 
-func (db *AbstractRelDB) FindAll(tableName string, predicate func(objWrapper ObjWrapper) bool) []*ObjWrapper {
-	var result []*ObjWrapper
+func (db *AbstractRelDB) FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject) {
+	var resultIds []string
+	var resultValues []*IObject
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		objWrapper := NewObjWrapper(db, key, Decode(value))
-		if predicate(*objWrapper) {
-			result = append(result, objWrapper)
+		curObj := Decode(value)
+		if predicate(key, curObj) {
+			resultIds = append(resultIds, key)
+			resultValues = append(resultValues, curObj)
 		}
 		return false
 	})
-	return result
-
+	return resultIds, resultValues
 }
+
+//region Fluent toolkit
+
+func tableName[T IObject]() string {
+	var t T
+	return t.TableName()
+}
+
+func Insert[T IObject](db IRelationalDB, value T) *ObjWrapper[T] {
+	id := db.Insert(value)
+	return NewObjWrapper(db, id, &value)
+}
+
+func Set[T IObject](db IRelationalDB, id string, value T) *ObjWrapper[T] {
+	err := db.Set(id, value)
+	if err != nil {
+		return nil
+	}
+	return NewObjWrapper(db, id, &value)
+}
+
+func Get[T IObject](db IRelationalDB, id string) *ObjWrapper[T] {
+	get := db.Get(tableName[T](), id)
+	t := (*get).(T)
+	return NewObjWrapper(db, id, &t)
+}
+
+func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjWrapper[T] {
+
+	var t T
+	db.Update(tableName[T](), id, func(value IObject) IObject {
+		t = (value).(T)
+		editor(&t)
+		return t
+	})
+	return NewObjWrapper(db, id, &t)
+}
+
+func Delete[T IObject](db IRelationalDB, id string) error {
+	return db.Delete(tableName[T](), id)
+}
+
+func DeepDelete[T IObject](db IRelationalDB, id string) error {
+	return db.DeepDelete(tableName[T](), id)
+}
+
+func Exist[T IObject](db IRelationalDB, id string) bool {
+	return db.Exist(tableName[T](), id)
+}
+
+func Count[T IObject](db IRelationalDB) int {
+	return db.Count(tableName[T]())
+}
+
+func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
+	db.Foreach(tableName[T](), func(id string, value *IObject) {
+		do(id, (*T)(unsafe.Pointer(value)))
+	})
+}
+
+func FindFirst[T IObject](db IRelationalDB, predicate func(id string, value *T) bool) *ObjWrapper[T] {
+	resultId, resultValue := db.FindFirst(tableName[T](), func(id string, value *IObject) bool {
+		t := (*value).(T)
+		return predicate(id, &t)
+	})
+	if resultValue == nil {
+		return nil
+	}
+	return NewObjWrapper(db, resultId, (*T)(unsafe.Pointer(resultValue)))
+}
+
+func FindAll[T IObject](db IRelationalDB, predicate func(id string, value *T) bool) []*ObjWrapper[T] {
+	var objs []*ObjWrapper[T]
+	ids, results := db.FindAll(tableName[T](), func(id string, value *IObject) bool {
+		t := (*value).(T)
+		return predicate(id, &t)
+	})
+	for i, curId := range ids {
+		objs = append(objs, NewObjWrapper(db, curId, (*T)(unsafe.Pointer(results[i]))))
+	}
+	return objs
+}
+
+//endregion

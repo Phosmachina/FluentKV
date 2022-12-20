@@ -4,8 +4,8 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/kataras/golog"
-	"reflect"
 	"strings"
+	"unsafe"
 )
 
 type IObject interface {
@@ -29,28 +29,24 @@ func (o DBObject) Hash() string {
 	return fmt.Sprintf("%x", md5.Sum([]byte(o.ToString())))
 }
 
-func (o DBObject) TableName() string {
-	return reflect.TypeOf(o).Name()
-}
-
-type ObjWrapper struct {
+type ObjWrapper[T IObject] struct {
 	db    IRelationalDB
 	ID    string
-	Value IObject
+	Value T
 }
 
-func NewObjWrapper(db IRelationalDB, ID string, value *IObject) *ObjWrapper {
-	return &ObjWrapper{db: db, ID: ID, Value: *value}
+func NewObjWrapper[T IObject](db IRelationalDB, ID string, value *T) *ObjWrapper[T] {
+	return &ObjWrapper[T]{db: db, ID: ID, Value: *value}
 }
 
-func (t *ObjWrapper) Link(biDirectional bool, tableName string, ids ...string) {
+func (t *ObjWrapper[IObject]) Link(biDirectional bool, tableName string, ids ...string) {
 	for _, id := range ids {
 		exist := t.db.Exist(tableName, id)
 		if !exist {
 			golog.Warnf("Id '%s' not found and cannot be link.", id)
 			continue
 		}
-		k := MakeLinkKey(t, tableName, id)
+		k := MakeLinkKey(t.Value.TableName(), t.ID, tableName, id)
 		if biDirectional {
 			t.db.RawSet(PrefixLink, k[1], nil)
 		}
@@ -58,31 +54,63 @@ func (t *ObjWrapper) Link(biDirectional bool, tableName string, ids ...string) {
 	}
 }
 
-func (t *ObjWrapper) LinkNew(biDirectional bool, objs ...IObject) {
+func (t *ObjWrapper[IObject]) LinkNew(biDirectional bool, objs ...IObject) {
 	for _, obj := range objs {
-		t.Link(biDirectional, (t.Value).TableName(), t.db.Insert(obj).ID)
+		t.Link(biDirectional, (t.Value).TableName(), t.db.Insert(obj))
 	}
 }
 
-func (t *ObjWrapper) FromLink(tableName string, id string) *ObjWrapper {
-	K := MakeLinkKey(t, tableName, id)
-	rawGet, found := t.db.RawGet(PrefixLink, K[0])
+func (t *ObjWrapper[IObject]) FromLink(tableName string, id string) (string, *IObject) {
+	K := MakeLinkKey(t.Value.TableName(), t.ID, tableName, id)
+	value, found := t.db.RawGet(PrefixLink, K[0])
 	if found {
-		return NewObjWrapper(t.db, id, Decode(rawGet))
+		return id, (*IObject)(unsafe.Pointer(Decode(value)))
+	}
+	return "", nil
+}
+
+func (t *ObjWrapper[IObject]) AllFromLink(tableName string) ([]string, []*IObject) {
+	var resultIds []string
+	var resultValues []*IObject
+	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		if strings.HasPrefix(key, t.Value.TableName()+Delimiter+t.ID+LinkDelimiter+tableName) {
+			resultIds = append(resultIds, key)
+			resultValues = append(resultValues,
+				(*IObject)(unsafe.Pointer(t.db.Get(
+					tableName,
+					strings.Split(strings.Split(key, LinkDelimiter)[1], Delimiter)[1]))),
+			)
+		}
+		return false
+	})
+	return resultIds, resultValues
+}
+
+// region Fluent toolkit
+
+func Link[T IObject](t *ObjWrapper[IObject], biDirectional bool, tableName string, ids ...string) {
+	t.Link(biDirectional, tableName, ids...)
+}
+
+func LinkNew[T IObject](t *ObjWrapper[IObject], biDirectional bool, objs ...IObject) {
+	t.LinkNew(biDirectional, objs...)
+}
+
+func FromLink[T IObject](t *ObjWrapper[IObject], tableName string, id string) *ObjWrapper[T] {
+	resultId, resultValue := t.FromLink(tableName, id)
+	if resultValue != nil {
+		return NewObjWrapper(t.db, resultId, (*T)(unsafe.Pointer(resultValue)))
 	}
 	return nil
 }
 
-func (t *ObjWrapper) AllFromLink(tableName string) []*ObjWrapper {
-	var objs []*ObjWrapper
-	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
-		if strings.HasPrefix(key, t.Value.TableName()+Delimiter+t.ID+LinkDelimiter+tableName) {
-			objs = append(objs, t.db.Get(
-				tableName,
-				strings.Split(strings.Split(key, LinkDelimiter)[1], Delimiter)[1],
-			))
-		}
-		return false
-	})
+func AllFromLink[T IObject](t *ObjWrapper[IObject], tableName string) []*ObjWrapper[T] {
+	var objs []*ObjWrapper[T]
+	ids, results := t.AllFromLink(tableName)
+	for i, curId := range ids {
+		objs = append(objs, NewObjWrapper(t.db, curId, (*T)(unsafe.Pointer(results[i]))))
+	}
 	return objs
 }
+
+//endregion
