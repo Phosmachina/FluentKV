@@ -91,7 +91,10 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 			return nil
 		})
 	})
-	if err != nil && err != badger.ErrKeyNotFound {
+	if err == badger.ErrKeyNotFound {
+		return nil, false
+	}
+	if err != nil {
 		golog.Error(err)
 		return nil, false
 	}

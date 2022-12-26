@@ -17,10 +17,6 @@ type IObject interface {
 
 type DBObject struct{ IObject }
 
-func NewAbstractObject(IObject IObject) *DBObject {
-	return &DBObject{IObject: IObject}
-}
-
 func (o DBObject) Equals(v IObject) bool {
 	return o.Hash() == v.Hash()
 }
@@ -54,19 +50,23 @@ func (t *ObjWrapper[IObject]) Link(biDirectional bool, tableName string, ids ...
 	}
 }
 
-func (t *ObjWrapper[IObject]) LinkNew(biDirectional bool, objs ...IObject) {
+func (t *ObjWrapper[IObject]) LinkNew(biDirectional bool, objs ...IObject) []*ObjWrapper[IObject] {
+	var objWrapped []*ObjWrapper[IObject]
 	for _, obj := range objs {
-		t.Link(biDirectional, (t.Value).TableName(), t.db.Insert(obj))
+		id := t.db.Insert(obj)
+		t.Link(biDirectional, (t.Value).TableName(), id)
+		wrapper := NewObjWrapper(t.db, id, &obj)
+		objWrapped = append(objWrapped, wrapper)
 	}
+	return objWrapped
 }
 
-func (t *ObjWrapper[IObject]) FromLink(tableName string, id string) (string, *IObject) {
-	K := MakeLinkKey(t.Value.TableName(), t.ID, tableName, id)
-	value, found := t.db.RawGet(PrefixLink, K[0])
-	if found {
-		return id, (*IObject)(unsafe.Pointer(Decode(value)))
+func (t *ObjWrapper[IObject]) FromLink(tableName string) (string, *IObject) {
+	ids, objects := t.AllFromLink(tableName)
+	if len(ids) == 0 {
+		return "", nil
 	}
-	return "", nil
+	return ids[0], objects[0]
 }
 
 func (t *ObjWrapper[IObject]) AllFromLink(tableName string) ([]string, []*IObject) {
@@ -88,29 +88,29 @@ func (t *ObjWrapper[IObject]) AllFromLink(tableName string) ([]string, []*IObjec
 
 // region Fluent toolkit
 
-func Link[T IObject](t *ObjWrapper[IObject], biDirectional bool, tableName string, ids ...string) {
-	t.Link(biDirectional, tableName, ids...)
-}
-
-func LinkNew[T IObject](t *ObjWrapper[IObject], biDirectional bool, objs ...IObject) {
-	t.LinkNew(biDirectional, objs...)
-}
-
-func FromLink[T IObject](t *ObjWrapper[IObject], tableName string, id string) *ObjWrapper[T] {
-	resultId, resultValue := t.FromLink(tableName, id)
-	if resultValue != nil {
-		return NewObjWrapper(t.db, resultId, (*T)(unsafe.Pointer(resultValue)))
-	}
-	return nil
-}
-
-func AllFromLink[T IObject](t *ObjWrapper[IObject], tableName string) []*ObjWrapper[T] {
-	var objs []*ObjWrapper[T]
-	ids, results := t.AllFromLink(tableName)
-	for i, curId := range ids {
-		objs = append(objs, NewObjWrapper(t.db, curId, (*T)(unsafe.Pointer(results[i]))))
-	}
-	return objs
-}
+//func Link[T IObject](t *ObjWrapper[IObject], biDirectional bool, tableName string, ids ...string) {
+//	t.Link(biDirectional, tableName, ids...)
+//}
+//
+//func LinkNew[T IObject](t *ObjWrapper[IObject], biDirectional bool, objs ...IObject) {
+//	t.LinkNew(biDirectional, objs...)
+//}
+//
+//func FromLink[T IObject](t *ObjWrapper[IObject], tableName string, id string) *ObjWrapper[T] {
+//	resultId, resultValue := t.FromLink(tableName, id)
+//	if resultValue != nil {
+//		return NewObjWrapper(t.db, resultId, (*T)(unsafe.Pointer(resultValue)))
+//	}
+//	return nil
+//}
+//
+//func AllFromLink[T IObject](t *ObjWrapper[IObject], tableName string) []*ObjWrapper[T] {
+//	var objs []*ObjWrapper[T]
+//	ids, results := t.AllFromLink(tableName)
+//	for i, curId := range ids {
+//		objs = append(objs, NewObjWrapper(t.db, curId, (*T)(unsafe.Pointer(results[i]))))
+//	}
+//	return objs
+//}
 
 //endregion

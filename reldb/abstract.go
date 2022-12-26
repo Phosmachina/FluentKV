@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"unsafe"
 )
 
 // AbstractRelDB pre-implement IRelationalDB,
@@ -181,12 +180,14 @@ func Set[T IObject](db IRelationalDB, id string, value T) *ObjWrapper[T] {
 
 func Get[T IObject](db IRelationalDB, id string) *ObjWrapper[T] {
 	get := db.Get(tableName[T](), id)
+	if get == nil {
+		return nil
+	}
 	t := (*get).(T)
 	return NewObjWrapper(db, id, &t)
 }
 
 func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjWrapper[T] {
-
 	var t T
 	db.Update(tableName[T](), id, func(value IObject) IObject {
 		t = (value).(T)
@@ -209,12 +210,13 @@ func Exist[T IObject](db IRelationalDB, id string) bool {
 }
 
 func Count[T IObject](db IRelationalDB) int {
-	return db.Count(tableName[T]())
+	return db.Count(MakePrefix(tableName[T]()))
 }
 
 func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
 	db.Foreach(tableName[T](), func(id string, value *IObject) {
-		do(id, (*T)(unsafe.Pointer(value)))
+		t := (*value).(T)
+		do(id, &t)
 	})
 }
 
@@ -226,7 +228,8 @@ func FindFirst[T IObject](db IRelationalDB, predicate func(id string, value *T) 
 	if resultValue == nil {
 		return nil
 	}
-	return NewObjWrapper(db, resultId, (*T)(unsafe.Pointer(resultValue)))
+	t := (*resultValue).(T)
+	return NewObjWrapper(db, resultId, &t)
 }
 
 func FindAll[T IObject](db IRelationalDB, predicate func(id string, value *T) bool) []*ObjWrapper[T] {
@@ -236,7 +239,8 @@ func FindAll[T IObject](db IRelationalDB, predicate func(id string, value *T) bo
 		return predicate(id, &t)
 	})
 	for i, curId := range ids {
-		objs = append(objs, NewObjWrapper(db, curId, (*T)(unsafe.Pointer(results[i]))))
+		t := (*results[i]).(T)
+		objs = append(objs, NewObjWrapper(db, curId, &t))
 	}
 	return objs
 }
