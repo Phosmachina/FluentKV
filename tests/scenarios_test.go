@@ -2,8 +2,8 @@ package tests
 
 import (
 	"encoding/gob"
-	. "git.haythor.ml/naxxar/relational-badger/impl"
-	. "git.haythor.ml/naxxar/relational-badger/reldb"
+	. "git.antlia.tk/naxxar/relational-badger/impl"
+	. "git.antlia.tk/naxxar/relational-badger/reldb"
 	"os"
 	"strconv"
 	"testing"

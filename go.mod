@@ -1,4 +1,4 @@
-module git.haythor.ml/naxxar/relational-badger
+module git.antlia.tk/naxxar/relational-badger
 
 go 1.19
 

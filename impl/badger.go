@@ -3,7 +3,7 @@ package impl
 import (
 	"bytes"
 	"errors"
-	. "git.haythor.ml/naxxar/relational-badger/reldb"
+	. "git.antlia.tk/naxxar/relational-badger/reldb"
 	"github.com/dgraph-io/badger"
 	"github.com/kataras/golog"
 	"os"
