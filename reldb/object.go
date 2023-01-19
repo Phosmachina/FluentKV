@@ -61,15 +61,15 @@ func (t *ObjWrapper[IObject]) LinkNew(biDirectional bool, objs ...IObject) []*Ob
 	return objWrapped
 }
 
-func (t *ObjWrapper[IObject]) FromLink(tableName string) (string, *IObject) {
-	ids, objects := t.AllFromLink(tableName)
+func (t *ObjWrapper[IObject]) Unlink(tableName string) (string, *IObject) {
+	ids, objects := t.UnlinkAll(tableName)
 	if len(ids) == 0 {
 		return "", nil
 	}
 	return ids[0], objects[0]
 }
 
-func (t *ObjWrapper[IObject]) AllFromLink(tableName string) ([]string, []*IObject) {
+func (t *ObjWrapper[IObject]) UnlinkAll(tableName string) ([]string, []*IObject) {
 	var resultIds []string
 	var resultValues []*IObject
 	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
@@ -86,31 +86,13 @@ func (t *ObjWrapper[IObject]) AllFromLink(tableName string) ([]string, []*IObjec
 	return resultIds, resultValues
 }
 
-// region Fluent toolkit
-
-//func Link[T IObject](t *ObjWrapper[IObject], biDirectional bool, tableName string, ids ...string) {
-//	t.Link(biDirectional, tableName, ids...)
-//}
-//
-//func LinkNew[T IObject](t *ObjWrapper[IObject], biDirectional bool, objs ...IObject) {
-//	t.LinkNew(biDirectional, objs...)
-//}
-//
-//func FromLink[T IObject](t *ObjWrapper[IObject], tableName string, id string) *ObjWrapper[T] {
-//	resultId, resultValue := t.FromLink(tableName, id)
-//	if resultValue != nil {
-//		return NewObjWrapper(t.db, resultId, (*T)(unsafe.Pointer(resultValue)))
-//	}
-//	return nil
-//}
-//
-//func AllFromLink[T IObject](t *ObjWrapper[IObject], tableName string) []*ObjWrapper[T] {
-//	var objs []*ObjWrapper[T]
-//	ids, results := t.AllFromLink(tableName)
-//	for i, curId := range ids {
-//		objs = append(objs, NewObjWrapper(t.db, curId, (*T)(unsafe.Pointer(results[i]))))
-//	}
-//	return objs
-//}
-
-//endregion
+func (t *ObjWrapper[IObject]) Visit(tableName string) []string {
+	var resultIds []string
+	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		if strings.HasPrefix(key, t.Value.TableName()+Delimiter+t.ID+LinkDelimiter+tableName) {
+			resultIds = append(resultIds, key)
+		}
+		return false
+	})
+	return resultIds
+}

@@ -147,16 +147,16 @@ func Test_Link(t *testing.T) {
 	o3Wrp := o1Wrp.LinkNew(false, o3)[0]
 	o1Wrp.Link(true, o2.TableName(), o2Wrp.ID)
 
-	id, _ := o3Wrp.AllFromLink(o1.TableName())
+	id, _ := o3Wrp.UnlinkAll(o1.TableName())
 	if len(id) > 0 {
-		t.Error("FromLink return something in place of nothing.")
+		t.Error("Unlink return something in place of nothing.")
 	}
 
-	id, result := o1Wrp.AllFromLink(o2.TableName())
+	id, result := o1Wrp.UnlinkAll(o2.TableName())
 	if len(id) == 0 || id[0] == "" {
-		t.Error("FromLink return nothing in place of o2 object.")
+		t.Error("Unlink return nothing in place of o2 object.")
 		if !(*result[0]).Equals(o2) {
-			t.Error("FromLink not return o2 object.")
+			t.Error("Unlink not return o2 object.")
 		}
 	}
 }
