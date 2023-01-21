@@ -2,8 +2,8 @@ package tests
 
 import (
 	"encoding/gob"
-	. "git.antlia.tk/naxxar/relational-badger/impl"
-	. "git.antlia.tk/naxxar/relational-badger/reldb"
+	. "git.antlia.tk/naxxar/FluentKV/impl"
+	. "git.antlia.tk/naxxar/FluentKV/reldb"
 	"os"
 	"strconv"
 	"testing"

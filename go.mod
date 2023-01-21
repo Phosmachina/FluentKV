@@ -1,4 +1,4 @@
-module git.antlia.tk/naxxar/relational-badger
+module git.antlia.tk/naxxar/FluentKV
 
 go 1.19
 

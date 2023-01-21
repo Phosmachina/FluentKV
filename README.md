@@ -1,3 +1,3 @@
-# Relational Badger DB
+# FluentKV
 
-> Purpose an implementation of table on top of BadgerDB.
+> Purpose a fluent toolkit for using a KV storage.
