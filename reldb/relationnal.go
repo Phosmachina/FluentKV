@@ -19,6 +19,8 @@ var (
 
 	Delimiter     = "_"
 	LinkDelimiter = "@"
+
+	InvalidId = errors.New("InvalidId")
 )
 
 /*
@@ -66,6 +68,7 @@ type IRelationalDB interface {
 	Insert(object IObject) string
 	// Set write a value for a specific id. TableName is inferred with the IObject. If Key not exist, an error is returned.
 	Set(id string, object IObject) error
+	SetWrp(objWrp ObjWrapper[IObject]) error
 	// Get retrieve the value for corresponding TableName and ID. Return nil if nothing found.
 	Get(tableName string, id string) *IObject
 	// Update retrieve the value for corresponding TableName and ID, call the editor et Set the resulted value.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/kataras/golog"
 	"strings"
-	"unsafe"
 )
 
 type IObject interface {
@@ -35,55 +34,82 @@ func NewObjWrapper[T IObject](db IRelationalDB, ID string, value *T) *ObjWrapper
 	return &ObjWrapper[T]{db: db, ID: ID, Value: *value}
 }
 
-func (t *ObjWrapper[IObject]) Link(biDirectional bool, tableName string, ids ...string) {
-	for _, id := range ids {
-		exist := t.db.Exist(tableName, id)
+func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, t ...*ObjWrapper[T]) {
+	var q T
+	tn := q.TableName()
+	for _, v := range t {
+		exist := s.db.Exist(tn, v.ID)
 		if !exist {
-			golog.Warnf("Id '%s' not found and cannot be link.", id)
+			golog.Warnf("Id '%s' not found and cannot be link.", v.ID)
 			continue
 		}
-		k := MakeLinkKey(t.Value.TableName(), t.ID, tableName, id)
+		k := MakeLinkKey(s.Value.TableName(), s.ID, tn, v.ID)
 		if biDirectional {
-			t.db.RawSet(PrefixLink, k[1], nil)
+			s.db.RawSet(PrefixLink, k[1], nil)
 		}
-		t.db.RawSet(PrefixLink, k[0], nil)
+		s.db.RawSet(PrefixLink, k[0], nil)
 	}
 }
 
-func (t *ObjWrapper[IObject]) LinkNew(biDirectional bool, objs ...IObject) []*ObjWrapper[IObject] {
-	var objWrapped []*ObjWrapper[IObject]
+func LinkNew[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, objs ...T) []*ObjWrapper[T] {
+	var objWrapped []*ObjWrapper[T]
 	for _, obj := range objs {
-		id := t.db.Insert(obj)
-		t.Link(biDirectional, (t.Value).TableName(), id)
-		wrapper := NewObjWrapper(t.db, id, &obj)
+		id := s.db.Insert(obj)
+		wrapper := NewObjWrapper(s.db, id, &obj)
+		Link[S, T](s, biDirectional, wrapper)
 		objWrapped = append(objWrapped, wrapper)
 	}
 	return objWrapped
 }
 
-func (t *ObjWrapper[IObject]) Unlink(tableName string) (string, *IObject) {
-	ids, objects := t.UnlinkAll(tableName)
-	if len(ids) == 0 {
-		return "", nil
-	}
-	return ids[0], objects[0]
-}
-
-func (t *ObjWrapper[IObject]) UnlinkAll(tableName string) ([]string, []*IObject) {
-	var resultIds []string
-	var resultValues []*IObject
-	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
-		if strings.HasPrefix(key, t.Value.TableName()+Delimiter+t.ID+LinkDelimiter+tableName) {
-			resultIds = append(resultIds, key)
-			resultValues = append(resultValues,
-				(*IObject)(unsafe.Pointer(t.db.Get(
-					tableName,
-					strings.Split(strings.Split(key, LinkDelimiter)[1], Delimiter)[1]))),
-			)
+func UnlinkAll[S IObject, T IObject](s *ObjWrapper[S]) []*ObjWrapper[T] {
+	var t T
+	tn := t.TableName()
+	var results []*ObjWrapper[T]
+	s.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		if strings.HasPrefix(key, s.Value.TableName()+Delimiter+s.ID+LinkDelimiter+tn) {
+			value := (*s.db.Get(
+				tn,
+				strings.Split(strings.Split(key, LinkDelimiter)[1], Delimiter)[1])).(T)
+			results = append(results, NewObjWrapper[T](s.db, key, &value))
 		}
 		return false
 	})
-	return resultIds, resultValues
+	return results
+}
+
+func RemoveLink[S IObject, T IObject](s *ObjWrapper[S], t *ObjWrapper[T]) bool {
+	k := MakeLinkKey(s.Value.TableName(), s.ID, t.Value.TableName(), t.ID)
+	t.db.RawDelete(PrefixLink, k[1])
+	return t.db.RawDelete(PrefixLink, k[0])
+}
+
+func RemoveAllTableLink[S IObject, T IObject](t *ObjWrapper[S]) {
+	var q T
+	tn := q.TableName()
+	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		split := strings.Split(key, LinkDelimiter)
+		tnAndIdL := strings.Split(split[0], Delimiter)
+		tnAndIdR := strings.Split(split[1], Delimiter)
+
+		if (tnAndIdL[0] == t.Value.TableName() && tnAndIdL[1] == t.ID && tnAndIdR[0] == tn) ||
+			(tnAndIdR[0] == t.Value.TableName() && tnAndIdR[1] == t.ID && tnAndIdL[0] == tn) {
+			t.db.RawDelete(PrefixLink, key)
+		}
+		return false
+	})
+}
+
+func (t *ObjWrapper[T]) RemoveAllLink() {
+	t.db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+		for _, s := range strings.Split(key, LinkDelimiter) {
+			tnAndId := strings.Split(s, Delimiter)
+			if tnAndId[1] == t.ID {
+				t.db.RawDelete(PrefixLink, key)
+			}
+		}
+		return false
+	})
 }
 
 func (t *ObjWrapper[IObject]) Visit(tableName string) []string {

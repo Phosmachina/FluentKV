@@ -51,10 +51,14 @@ func (db *AbstractRelDB) Insert(object IObject) string {
 
 func (db *AbstractRelDB) Set(id string, object IObject) error {
 	if !db.Exist(object.TableName(), id) {
-		return errors.New("") // TODO uniformize error
+		return InvalidId
 	}
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
 	return nil
+}
+
+func (db *AbstractRelDB) SetWrp(objWrp ObjWrapper[IObject]) error {
+	return db.Set(objWrp.ID, objWrp.Value)
 }
 
 func (db *AbstractRelDB) Get(tableName string, id string) *IObject {
@@ -78,7 +82,7 @@ func (db *AbstractRelDB) Update(tableName string, id string, editor func(value I
 
 func (db *AbstractRelDB) Delete(tableName string, id string) error {
 	if !db.RawDelete(MakePrefix(tableName), id) {
-		return errors.New("invalid id") // TODO uniformize error
+		return InvalidId
 	}
 	db.FreeKey(id)
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
@@ -95,7 +99,7 @@ func (db *AbstractRelDB) Delete(tableName string, id string) error {
 
 func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
 	if !db.RawDelete(MakePrefix(tableName), id) {
-		return errors.New("invalid id") // TODO uniformize error
+		return InvalidId
 	}
 	db.FreeKey(id)
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
@@ -176,6 +180,10 @@ func Set[T IObject](db IRelationalDB, id string, value T) *ObjWrapper[T] {
 		return nil
 	}
 	return NewObjWrapper(db, id, &value)
+}
+
+func SetWrp[T IObject](db IRelationalDB, objWrp ObjWrapper[T]) *ObjWrapper[T] {
+	return Set(db, objWrp.ID, objWrp.Value)
 }
 
 func Get[T IObject](db IRelationalDB, id string) *ObjWrapper[T] {

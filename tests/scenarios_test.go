@@ -16,27 +16,38 @@ type SimpleType struct {
 	Val int
 }
 
-func NewSimpleType(t1 string, t2 string, val int) *SimpleType {
+func NewSimpleType(t1 string, t2 string, val int) SimpleType {
 	simpleType := SimpleType{T1: t1, T2: t2, Val: val}
 	simpleType.IObject = simpleType
-	return &simpleType
+	return simpleType
 }
 
-func (t SimpleType) ToString() string {
-	return ToString(t)
+func (t SimpleType) ToString() string  { return ToString(t) }
+func (t SimpleType) TableName() string { return NameOfStruct[SimpleType]() }
+
+type AnotherType struct {
+	DBObject
+	T3      string
+	Numeric float32
 }
 
-func (t SimpleType) TableName() string {
-	return NameOfStruct[SimpleType]()
+func NewAnotherType(t3 string, numeric float32) AnotherType {
+	anotherType := AnotherType{T3: t3, Numeric: numeric}
+	anotherType.IObject = anotherType
+	return anotherType
 }
+
+func (t AnotherType) ToString() string  { return ToString(t) }
+func (t AnotherType) TableName() string { return NameOfStruct[AnotherType]() }
 
 func prepareTest() IRelationalDB {
 	// Clean previous db data
 	_ = os.RemoveAll("data")
 
 	// Register type used in db
-	gob.Register(DBObject{})
+	//gob.Register(DBObject{})
 	gob.Register(SimpleType{})
+	gob.Register(AnotherType{})
 
 	// Initialize db
 	AutoKeyBuffer = 10
@@ -144,20 +155,19 @@ func Test_Link(t *testing.T) {
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
 
-	o3Wrp := o1Wrp.LinkNew(false, o3)[0]
-	o1Wrp.Link(true, o2.TableName(), o2Wrp.ID)
+	o3Wrp := LinkNew(o1Wrp, false, o3)[0]
+	Link(o1Wrp, true, o2Wrp)
 
-	id, _ := o3Wrp.UnlinkAll(o1.TableName())
-	if len(id) > 0 {
+	if len(UnlinkAll[SimpleType, SimpleType](o3Wrp)) > 0 {
 		t.Error("Unlink return something in place of nothing.")
 	}
 
-	id, result := o1Wrp.UnlinkAll(o2.TableName())
-	if len(id) == 0 || id[0] == "" {
+	results := UnlinkAll[SimpleType, SimpleType](o1Wrp)
+	if len(results) == 0 {
 		t.Error("Unlink return nothing in place of o2 object.")
-		if !(*result[0]).Equals(o2) {
-			t.Error("Unlink not return o2 object.")
-		}
+	}
+	if !results[0].Value.Equals(o2) {
+		t.Error("Unlink not return o2 object.")
 	}
 }
 
@@ -166,7 +176,7 @@ func Test_Delete(t *testing.T) {
 	o2 := NewSimpleType("val for t1", "val for t2", 2)
 	db := prepareTest()
 
-	idO2 := Insert(db, o1).LinkNew(true, o2)[0].ID
+	idO2 := LinkNew(Insert(db, o1), true, o2)[0].ID
 
 	err := Delete[SimpleType](db, idO2)
 	if err != nil {
@@ -188,8 +198,8 @@ func Test_DeepDelete_0(t *testing.T) {
 	o2Wrp := Insert(db, o2)
 	o3Wrp := Insert(db, o3)
 
-	o1Wrp.Link(true, SimpleType{}.TableName(), o2Wrp.ID)
-	o1Wrp.Link(false, SimpleType{}.TableName(), o3Wrp.ID)
+	Link(o1Wrp, true, o2Wrp)
+	Link(o1Wrp, false, o3Wrp)
 
 	err := DeepDelete[SimpleType](db, o1Wrp.ID)
 	if err != nil {
@@ -217,14 +227,13 @@ func Test_DeepDelete_1(t *testing.T) {
 	o2Wrp := Insert(db, o2)
 	o3Wrp := Insert(db, o3)
 
-	o3Wrp.Link(true, SimpleType{}.TableName(), o2Wrp.ID)
-	o1Wrp.Link(false, SimpleType{}.TableName(), o3Wrp.ID)
+	Link(o3Wrp, true, o2Wrp)
+	Link(o1Wrp, false, o3Wrp)
 
 	err := DeepDelete[SimpleType](db, o3Wrp.ID)
 	if err != nil {
 		t.Error("DeepDelete not correctly done.")
 	}
-
 	if Get[SimpleType](db, o1Wrp.ID) == nil {
 		t.Error("o1 object is deleted.")
 	}
@@ -236,8 +245,94 @@ func Test_DeepDelete_1(t *testing.T) {
 	}
 }
 
+func Test_RemoveLink(t *testing.T) {
+	o1 := NewSimpleType("val for t1", "val for t2", 1)
+	o2 := NewAnotherType("t3", 1.1)
+	o3 := NewAnotherType("val for t3", 4.5)
+
+	db := prepareTest()
+
+	o1Wrp := Insert(db, o1)
+	o2Wrp := Insert(db, o2)
+	o3Wrp := Insert(db, o3)
+
+	Link(o1Wrp, true, o2Wrp)
+	Link(o1Wrp, true, o3Wrp)
+
+	RemoveLink(o2Wrp, o1Wrp)
+
+	if !UnlinkAll[SimpleType, AnotherType](o1Wrp)[0].Value.Equals(o3Wrp.Value) {
+		t.Error("Invalid link after link deletion.")
+	}
+	if len(UnlinkAll[SimpleType, SimpleType](o1Wrp)) != 0 {
+		t.Error("Link are not deleted.")
+	}
+}
+
+func Test_RemoveAllTableLink(t *testing.T) {
+	o1 := NewSimpleType("val for t1", "val for t2", 1)
+	o2 := NewSimpleType("val for t1", "val for t2", 2)
+	o3 := NewSimpleType("val for t1", "val for t2", 3)
+
+	o4 := NewAnotherType("val for t3", 4.5)
+	o5 := NewAnotherType("val for t3", 5.5)
+
+	db := prepareTest()
+
+	o1Wrp := Insert(db, o1)
+	o2Wrp := Insert(db, o2)
+	o3Wrp := Insert(db, o3)
+	o4Wrp := Insert(db, o4)
+	o5Wrp := Insert(db, o5)
+
+	Link(o1Wrp, true, o2Wrp)
+	Link(o1Wrp, true, o3Wrp)
+	Link(o1Wrp, true, o4Wrp)
+	Link(o1Wrp, true, o5Wrp)
+
+	RemoveAllTableLink[SimpleType, AnotherType](o1Wrp)
+
+	if obj := UnlinkAll[SimpleType, AnotherType](o1Wrp); len(obj) != 0 {
+		t.Error("Links AnotherType are not deleted correctly.")
+	}
+	if obj := UnlinkAll[AnotherType, SimpleType](o4Wrp); len(obj) != 0 {
+		t.Error("Links AnotherType are not deleted correctly.")
+	}
+	if obj := UnlinkAll[SimpleType, SimpleType](o1Wrp); len(obj) != 2 {
+		t.Error("Links of SimpleType are deleted.")
+	}
+}
+
+func Test_RemoveAllLink(t *testing.T) {
+	o1 := NewSimpleType("val for t1", "val for t2", 1)
+	o2 := NewSimpleType("val for t1", "val for t2", 2)
+	o3 := NewSimpleType("val for t1", "val for t2", 3)
+
+	o4 := NewAnotherType("val for t3", 4.5)
+	o5 := NewAnotherType("val for t3", 5.5)
+
+	db := prepareTest()
+
+	o1Wrp := Insert(db, o1)
+	o2Wrp := Insert(db, o2)
+	o3Wrp := Insert(db, o3)
+	o4Wrp := Insert(db, o4)
+	o5Wrp := Insert(db, o5)
+
+	Link(o1Wrp, true, o2Wrp)
+	Link(o1Wrp, true, o3Wrp)
+	Link(o1Wrp, true, o4Wrp)
+	Link(o1Wrp, true, o5Wrp)
+
+	o1Wrp.RemoveAllLink()
+	if len(UnlinkAll[SimpleType, AnotherType](o1Wrp)) != 0 || len(UnlinkAll[SimpleType,
+		SimpleType](o1Wrp)) != 0 {
+		t.Error("All link are not deleted.")
+	}
+}
+
 func Test_Foreach(t *testing.T) {
-	objs := []*SimpleType{
+	objs := []SimpleType{
 		NewSimpleType("val for t1", "val for t2", 1),
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
@@ -257,7 +352,7 @@ func Test_Foreach(t *testing.T) {
 }
 
 func Test_FindFirst(t *testing.T) {
-	objs := []*SimpleType{
+	objs := []SimpleType{
 		NewSimpleType("val for t1", "val for t2", 1),
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
@@ -279,12 +374,12 @@ func Test_FindFirst(t *testing.T) {
 }
 
 func Test_FindAll(t *testing.T) {
-	objs := []*SimpleType{
+	objs := []SimpleType{
 		NewSimpleType("val for t1", "val for t2", 1),
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	common := []*SimpleType{
+	common := []SimpleType{
 		NewSimpleType("specific", "val for t2", 1),
 		NewSimpleType("specific", "val for t2", 2),
 	}
@@ -309,4 +404,11 @@ func Test_FindAll(t *testing.T) {
 			t.Error("FindAll return an unexpected value.")
 		}
 	}
+}
+
+func rawPrint(db IRelationalDB) {
+	db.RawIterKey("", func(key string) (stop bool) {
+		println(key)
+		return false
+	})
 }
