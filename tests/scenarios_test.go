@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+//region DB Object type declaration
+
 type SimpleType struct {
 	DBObject
 	T1  string
@@ -40,12 +42,14 @@ func NewAnotherType(t3 string, numeric float32) AnotherType {
 func (t AnotherType) ToString() string  { return ToString(t) }
 func (t AnotherType) TableName() string { return NameOfStruct[AnotherType]() }
 
+//endregion
+
+// prepareTest clean previous data, register the DB type for Gob, create a new DB.
 func prepareTest() IRelationalDB {
 	// Clean previous db data
 	_ = os.RemoveAll("data")
 
 	// Register type used in db
-	//gob.Register(DBObject{})
 	gob.Register(SimpleType{})
 	gob.Register(AnotherType{})
 

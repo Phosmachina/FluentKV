@@ -12,11 +12,16 @@ import (
 var (
 	AutoKeyBuffer = 100
 
+	// PreAutoKavlb prefix for available key.
 	PreAutoKavlb = "tank%avlb_"
+	// PreAutoKused prefix for used key.
 	PreAutoKused = "tank%used_"
-	PrefixLink   = "link%"
-	PrefixTable  = "tbl%"
+	// PrefixLink prefix for a link declaration.
+	PrefixLink = "link%"
+	// PrefixTable prefix for a table entry.
+	PrefixTable = "tbl%"
 
+	// Delimiter between the tableName and the key
 	Delimiter     = "_"
 	LinkDelimiter = "@"
 
@@ -28,18 +33,19 @@ IRelationalDB is a small interface to define some operation with a storage used 
 
 # Key
 
-In first, the underlying storage should be work like a KV DB. In consequence, a key is structured to store
+In first, the underlying storage should be work like a KV DB. In consequence,
+a key is structured to store a flattened hierarchy.
   - Key: internalTypePrefix, suffix
-  - Key for concrete type : internalTypePrefix, tableName, id
+  - Key for concrete type: internalTypePrefix, tableName, id
 
 To make uniq key, a tank key system is implemented and can be used with GetNextKey,
-FreeKey. The global AutoKeyBuffer defined the size of this tank. When value is inserted, a key is pick in tank. When entry is deleted,
-the key become available again.
+FreeKey. The global AutoKeyBuffer defined the size of this tank. When value is inserted,
+a key is pick in tank. When entry is deleted, the key become available again via GetNextKey.
 
 # Operators
 
-All raw operator must be implemented ; other can be but are already implement in the abstraction AbstractRelDB.
-Raw Operators probably work directly with the db driver and are used by all other operators.
+Interface is designed so that all raw operator must be implemented ; other can be but are already
+implement in the abstraction AbstractRelDB. Raw Operators probably work directly with the db driver and are used by all other operators.
 */
 type IRelationalDB interface {
 	// GetNextKey pick a key in tank of key. If tank is empty, it should be filled with unused key.
@@ -86,7 +92,11 @@ type IRelationalDB interface {
 	Count(tableName string) int
 	// Foreach call the do function for each value whose key is prefixed by TableName.
 	Foreach(tableName string, do func(id string, value *IObject))
+	// FindFirst iterate on values of tableName and apply the predicate: if predicate is true the
+	//value is returned.
 	FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject)
+	// FindAll iterate on values of tableName and apply the predicate: all values matched are
+	//returned.
 	FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject)
 
 	Print(tableName string) error
@@ -133,6 +143,7 @@ func Decode(value []byte) *IObject {
 
 //region Utils
 
+// NameOfStruct simply reflect the name of the type T.
 func NameOfStruct[T any]() string {
 	return reflect.TypeOf((*T)(nil)).Elem().Name()
 }
@@ -153,6 +164,7 @@ func Type[T IObject]() *T {
 	return (*T)(nil)
 }
 
+// ToString print the name of type and all field name with the corresponding value.
 func ToString(v any) string {
 	typeOf := reflect.TypeOf(v)
 	result := typeOf.Name()
