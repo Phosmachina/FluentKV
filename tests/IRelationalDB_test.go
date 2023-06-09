@@ -109,11 +109,11 @@ func Test_Link(t *testing.T) {
 	o3Wrp := LinkNew(o1Wrp, false, o3)[0]
 	Link(o1Wrp, true, o2Wrp)
 
-	if len(UnlinkAll[SimpleType, SimpleType](o3Wrp)) > 0 {
+	if len(AllFromLinkWrp[SimpleType, SimpleType](o3Wrp)) > 0 {
 		t.Error("Unlink return something in place of nothing.")
 	}
 
-	results := UnlinkAll[SimpleType, SimpleType](o1Wrp)
+	results := AllFromLinkWrp[SimpleType, SimpleType](o1Wrp)
 	if len(results) == 0 {
 		t.Error("Unlink return nothing in place of o2 object.")
 	}
@@ -212,10 +212,10 @@ func Test_RemoveLink(t *testing.T) {
 
 	RemoveLink(o2Wrp, o1Wrp)
 
-	if !UnlinkAll[SimpleType, AnotherType](o1Wrp)[0].Value.Equals(o3Wrp.Value) {
+	if !AllFromLinkWrp[SimpleType, AnotherType](o1Wrp)[0].Value.Equals(o3Wrp.Value) {
 		t.Error("Invalid link after link deletion.")
 	}
-	if len(UnlinkAll[SimpleType, SimpleType](o1Wrp)) != 0 {
+	if len(AllFromLinkWrp[SimpleType, SimpleType](o1Wrp)) != 0 {
 		t.Error("Link are not deleted.")
 	}
 }
@@ -243,13 +243,13 @@ func Test_RemoveAllTableLink(t *testing.T) {
 
 	RemoveAllTableLink[SimpleType, AnotherType](o1Wrp)
 
-	if obj := UnlinkAll[SimpleType, AnotherType](o1Wrp); len(obj) != 0 {
+	if obj := AllFromLinkWrp[SimpleType, AnotherType](o1Wrp); len(obj) != 0 {
 		t.Error("Links AnotherType are not deleted correctly.")
 	}
-	if obj := UnlinkAll[AnotherType, SimpleType](o4Wrp); len(obj) != 0 {
+	if obj := AllFromLinkWrp[AnotherType, SimpleType](o4Wrp); len(obj) != 0 {
 		t.Error("Links AnotherType are not deleted correctly.")
 	}
-	if obj := UnlinkAll[SimpleType, SimpleType](o1Wrp); len(obj) != 2 {
+	if obj := AllFromLinkWrp[SimpleType, SimpleType](o1Wrp); len(obj) != 2 {
 		t.Error("Links of SimpleType are deleted.")
 	}
 }
@@ -276,7 +276,7 @@ func Test_RemoveAllLink(t *testing.T) {
 	Link(o1Wrp, true, o5Wrp)
 
 	o1Wrp.RemoveAllLink()
-	if len(UnlinkAll[SimpleType, AnotherType](o1Wrp)) != 0 || len(UnlinkAll[SimpleType,
+	if len(AllFromLinkWrp[SimpleType, AnotherType](o1Wrp)) != 0 || len(AllFromLinkWrp[SimpleType,
 		SimpleType](o1Wrp)) != 0 {
 		t.Error("All link are not deleted.")
 	}

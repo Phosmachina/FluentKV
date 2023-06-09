@@ -1,4 +1,4 @@
-package reldb
+package fluentkv
 
 import (
 	"bytes"
@@ -57,17 +57,17 @@ type IRelationalDB interface {
 	// RawSet set a value in DB. prefix and key are simply concatenated. Don't care about Key is already in used or not.
 	RawSet(prefix string, key string, value []byte)
 	// RawGet get a value in DB. prefix and key are simply concatenated. If no value corresponding to this Key,
-	//empty slice and false should be returned.
+	// empty slice and false should be returned.
 	RawGet(prefix string, key string) ([]byte, bool)
 	// RawDelete delete a value in DB. prefix and key are simply concatenated. Return true if value is correctly deleted.
 	RawDelete(prefix string, key string) bool
 	// RawIterKey iterate in DB when prefix match with Key.
-	//The action it called for each Key and the key is truncated with the prefix given.
-	//The stop boolean defined if iteration should be stopped. No values are prefetched with this iterator.
+	// The action it called for each Key and the key is truncated with the prefix given.
+	// The stop boolean defined if iteration should be stopped. No values are prefetched with this iterator.
 	RawIterKey(prefix string, action func(key string) (stop bool))
 	// RawIterKV iterate in DB when prefix match with Key.
-	//The action it called for each Key and the key is truncated with the prefix given.
-	//The stop boolean defined if iteration should be stopped. value is the corresponding value of the key.
+	// The action it called for each Key and the key is truncated with the prefix given.
+	// The stop boolean defined if iteration should be stopped. value is the corresponding value of the key.
 	RawIterKV(prefix string, action func(key string, value []byte) (stop bool))
 
 	// Insert create a new entry in storage with IObject passed. TableName is inferred with the IObject.
@@ -80,10 +80,10 @@ type IRelationalDB interface {
 	// Update retrieve the value for corresponding TableName and ID, call the editor et Set the resulted value.
 	Update(tableName string, id string, editor func(value IObject) IObject) *IObject
 	// Delete remove the value for corresponding TableName and ID. If Key not exist,
-	//an error is returned. The link using the object will be also deleted.
+	// an error is returned. The link using the object will be also deleted.
 	Delete(tableName string, id string) error
 	// DeepDelete remove the value for corresponding TableName and ID. If Key not exist,
-	//an error is returned. It also recursively remove all values connected with a link.
+	// an error is returned. It also recursively remove all values connected with a link.
 	DeepDelete(tableName string, id string) error
 	// Exist return true if the for corresponding TableName and ID exist in DB.
 	Exist(tableName string, id string) bool
@@ -93,16 +93,16 @@ type IRelationalDB interface {
 	// Foreach call the do function for each value whose key is prefixed by TableName.
 	Foreach(tableName string, do func(id string, value *IObject))
 	// FindFirst iterate on values of tableName and apply the predicate: if predicate is true the
-	//value is returned.
+	// value is returned.
 	FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject)
 	// FindAll iterate on values of tableName and apply the predicate: all values matched are
-	//returned.
+	// returned.
 	FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject)
 
 	Print(tableName string) error
 }
 
-//region Helpers
+// region Helpers
 
 func MakePrefix(tableName string) string {
 	return PrefixTable + tableName + Delimiter
@@ -113,35 +113,42 @@ func MakeKey(tableName, id string) []byte {
 }
 
 func MakeLinkKey(tableName string, id string, targetName string, targetId string) []string {
+
 	k1 := tableName + Delimiter + id
 	k2 := targetName + Delimiter + targetId
+
 	return []string{k1 + LinkDelimiter + k2, k2 + LinkDelimiter + k1}
 }
 
 func Encode(obj *IObject) []byte {
+
 	buffer := bytes.Buffer{}
 	err := gob.NewEncoder(&buffer).Encode(obj)
 	if err != nil {
+		// TODO add a logger
 		golog.Error(err)
 		return nil
 	}
+
 	return buffer.Bytes()
 }
 
 func Decode(value []byte) *IObject {
+
 	buffer := bytes.Buffer{}
 	var object *IObject
 	buffer.Write(value)
 	err := gob.NewDecoder(&buffer).Decode(&object)
 	if err != nil {
-		golog.Error(err)
+		// TODO add a logger? Or return nil/err
 	}
+
 	return object
 }
 
-//endregion
+// endregion
 
-//region Utils
+// region Utils
 
 // NameOfStruct simply reflect the name of the type T.
 func NameOfStruct[T any]() string {
@@ -149,14 +156,17 @@ func NameOfStruct[T any]() string {
 }
 
 func NameOfField(parent interface{}, field interface{}) (string, error) {
+
 	s := reflect.ValueOf(parent).Elem()
 	f := reflect.ValueOf(field).Elem()
+
 	for i := 0; i < s.NumField(); i++ {
 		valueField := s.Field(i)
 		if valueField.Addr().Interface() == f.Addr().Interface() {
 			return s.Type().Field(i).Name, nil
 		}
 	}
+
 	return "", errors.New("invalid parameters")
 }
 
@@ -166,14 +176,17 @@ func Type[T IObject]() *T {
 
 // ToString print the name of type and all field name with the corresponding value.
 func ToString(v any) string {
+
 	typeOf := reflect.TypeOf(v)
 	result := typeOf.Name()
 	value := reflect.ValueOf(v)
+
 	for i := 0; i < typeOf.NumField(); i++ {
 		field := typeOf.Field(i)
 		result += fmt.Sprintf(" | %s: %v", field.Name, value.Field(i))
 	}
+
 	return result
 }
 
-//endregion
+// endregion

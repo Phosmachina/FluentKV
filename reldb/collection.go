@@ -1,4 +1,4 @@
-package reldb
+package fluentkv
 
 import (
 	"sort"
@@ -64,10 +64,10 @@ func (c *Collection[T]) Distinct() *Collection[T] {
 // probably used in a same way for each element of the collection).
 //
 // For each object in collection the predicate is applied with the current object and all
-// connected object given by an UnlinkAll operation. If the predicate returns true,
+// connected object given by an AllFromLink operation. If the predicate returns true,
 // the current object is retained.
 //
-// If the option firstOnly is set to true, only the first result of UnlinkAll is retained.
+// If the option firstOnly is set to true, only the first result of AllFromLink is retained.
 //
 // Obviously, the result of unlink can be nil and predicate function must manage this case.
 func Where[T IObject, K IObject](
@@ -78,7 +78,7 @@ func Where[T IObject, K IObject](
 
 	var list []*ObjWrapper[T]
 	for _, objCol1 := range collection.objects {
-		objectsWrp := UnlinkAll[T, K](objCol1)
+		objectsWrp := AllFromLink[T, K](objCol1.db, objCol1.ID)
 		if len(objectsWrp) > 1 && firstOnly {
 			objectsWrp = objectsWrp[1:]
 		}

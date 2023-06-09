@@ -1,4 +1,4 @@
-package reldb
+package fluentkv
 
 import (
 	"errors"
@@ -11,23 +11,29 @@ import (
 type AbstractRelDB struct{ IRelationalDB }
 
 func (db *AbstractRelDB) GetNextKey() string {
+
 	var key string
+
 	if db.Count(PreAutoKavlb) == 0 { // Check tank have available keys for this table.
 		cur := db.Count(PreAutoKused)
 		for i := cur; i < cur+AutoKeyBuffer; i++ {
 			db.RawSet(PreAutoKavlb, strconv.Itoa(i), nil)
 		}
 	}
+
 	db.RawIterKey(PreAutoKavlb, func(k string) (stop bool) { // Get next key.
 		key = k
 		_ = db.RawDelete(PreAutoKavlb, k)
 		return true
 	})
+
 	return key
 }
 
 func (db *AbstractRelDB) FreeKey(keys ...string) []error {
+
 	var errs []error
+
 	for _, key := range keys {
 		if !db.RawDelete(PreAutoKused, key) {
 			errs = append(errs, errors.New("invalid id for FreeKey: "+key))
@@ -35,25 +41,30 @@ func (db *AbstractRelDB) FreeKey(keys ...string) []error {
 			db.RawSet(PreAutoKavlb, key, nil)
 		}
 	}
+
 	return errs
 }
 
 func (db *AbstractRelDB) CleanUnusedKey() {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (db *AbstractRelDB) Insert(object IObject) string {
+
 	id := db.GetNextKey()
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+
 	return id
 }
 
 func (db *AbstractRelDB) Set(id string, object IObject) error {
+
 	if !db.Exist(object.TableName(), id) {
 		return InvalidId
 	}
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+
 	return nil
 }
 
@@ -71,16 +82,19 @@ func (db *AbstractRelDB) Get(tableName string, id string) *IObject {
 }
 
 func (db *AbstractRelDB) Update(tableName string, id string, editor func(value IObject) IObject) *IObject {
+
 	value := db.Get(tableName, id)
 	if value == nil {
 		return nil
 	}
 	edited := editor(*value)
 	_ = db.Set(id, edited)
+
 	return &edited
 }
 
 func (db *AbstractRelDB) Delete(tableName string, id string) error {
+
 	if !db.RawDelete(MakePrefix(tableName), id) {
 		return InvalidId
 	}
@@ -94,10 +108,12 @@ func (db *AbstractRelDB) Delete(tableName string, id string) error {
 		}
 		return false
 	})
+
 	return nil
 }
 
 func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
+
 	if !db.RawDelete(MakePrefix(tableName), id) {
 		return InvalidId
 	}
@@ -114,15 +130,19 @@ func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
 		}
 		return false
 	})
+
 	return nil
 }
 
 func (db *AbstractRelDB) Count(prefix string) int {
+
 	var ct = 0
+
 	db.RawIterKey(prefix, func(key string) (stop bool) {
 		ct++
 		return false
 	})
+
 	return ct
 }
 
@@ -134,8 +154,10 @@ func (db *AbstractRelDB) Foreach(tableName string, do func(id string, value *IOb
 }
 
 func (db *AbstractRelDB) FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject) {
+
 	var resultId = ""
 	var resultValue *IObject
+
 	db.RawIterKV(MakePrefix(tableName), func(curId string, value []byte) (stop bool) {
 		tmpObj := Decode(value)
 		if predicate(curId, tmpObj) {
@@ -145,12 +167,15 @@ func (db *AbstractRelDB) FindFirst(tableName string, predicate func(id string, v
 		}
 		return false
 	})
+
 	return resultId, resultValue
 }
 
 func (db *AbstractRelDB) FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject) {
+
 	var resultIds []string
 	var resultValues []*IObject
+
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
 		curObj := Decode(value)
 		if predicate(key, curObj) {
@@ -159,10 +184,11 @@ func (db *AbstractRelDB) FindAll(tableName string, predicate func(id string, val
 		}
 		return false
 	})
+
 	return resultIds, resultValues
 }
 
-//region Fluent toolkit
+// region Fluent toolkit
 
 // tableName is a helper to call the TableName from T IObject implementation.
 func tableName[T IObject]() string {
@@ -178,10 +204,11 @@ func Insert[T IObject](db IRelationalDB, value T) *ObjWrapper[T] {
 
 // Set override the value at the id specified with the passed value. The id shall exist.
 func Set[T IObject](db IRelationalDB, id string, value T) *ObjWrapper[T] {
-	err := db.Set(id, value)
-	if err != nil {
+
+	if err := db.Set(id, value); err != nil {
 		return nil
 	}
+
 	return NewObjWrapper(db, id, &value)
 }
 
@@ -192,23 +219,29 @@ func SetWrp[T IObject](db IRelationalDB, objWrp ObjWrapper[T]) *ObjWrapper[T] {
 
 // Get the value in db based on id and the tableName induced by the T parameter.
 func Get[T IObject](db IRelationalDB, id string) *ObjWrapper[T] {
+
 	get := db.Get(tableName[T](), id)
+
 	if get == nil {
 		return nil
 	}
 	t := (*get).(T)
+
 	return NewObjWrapper(db, id, &t)
 }
 
 // Update the value determine with the id and the tableName induced by the T parameter.
 // The result of the editor function is set in the db.
 func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjWrapper[T] {
+
 	var t T
+
 	db.Update(tableName[T](), id, func(value IObject) IObject {
 		t = (value).(T)
 		editor(&t)
 		return t
 	})
+
 	return NewObjWrapper(db, id, &t)
 }
 
@@ -247,30 +280,37 @@ func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
 // FindFirst iterate on the table based on the tableName induced by the T parameter and execute the
 // predicate function on each value until it return true value: the current value is returned.
 func FindFirst[T IObject](db IRelationalDB, predicate func(id string, value *T) bool) *ObjWrapper[T] {
+
 	resultId, resultValue := db.FindFirst(tableName[T](), func(id string, value *IObject) bool {
 		t := (*value).(T)
 		return predicate(id, &t)
 	})
+
 	if resultValue == nil {
 		return nil
 	}
 	t := (*resultValue).(T)
+
 	return NewObjWrapper(db, resultId, &t)
 }
 
 // FindAll iterate on the table based on the tableName induced by the T parameter and execute the
 // predicate function on each value. All values matching the predicate are returned.
 func FindAll[T IObject](db IRelationalDB, predicate func(id string, value *T) bool) []*ObjWrapper[T] {
+
 	var objs []*ObjWrapper[T]
+
 	ids, results := db.FindAll(tableName[T](), func(id string, value *IObject) bool {
 		t := (*value).(T)
 		return predicate(id, &t)
 	})
+
 	for i, curId := range ids {
 		t := (*results[i]).(T)
 		objs = append(objs, NewObjWrapper(db, curId, &t))
 	}
+
 	return objs
 }
 
-//endregion
+// endregion
