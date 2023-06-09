@@ -2,12 +2,12 @@ package tests
 
 import (
 	"encoding/gob"
-	. "git.antlia.tk/naxxar/FluentKV/impl"
 	. "git.antlia.tk/naxxar/FluentKV/reldb"
+	. "git.antlia.tk/naxxar/FluentKV/reldb/impl"
 	"os"
 )
 
-//region DB Object type declaration
+// region DB Object type declaration
 
 type SimpleType struct {
 	DBObject
@@ -40,7 +40,7 @@ func NewAnotherType(t3 string, numeric float32) AnotherType {
 func (t AnotherType) ToString() string  { return ToString(t) }
 func (t AnotherType) TableName() string { return NameOfStruct[AnotherType]() }
 
-//endregion
+// endregion
 
 // prepareTest clean previous data, register the DB type for Gob, create a new DB.
 func prepareTest() IRelationalDB {

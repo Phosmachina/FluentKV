@@ -139,4 +139,4 @@ func Test_Filter(t *testing.T) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// TODO test complex cases based on SQL relevant situations (find them on sql.sh).
+// TODO test complex cases based on SQL relevant situations (find them on https://sql.sh).

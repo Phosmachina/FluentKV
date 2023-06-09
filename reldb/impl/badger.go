@@ -1,4 +1,4 @@
-package impl
+package driver
 
 import (
 	"bytes"
@@ -51,6 +51,7 @@ func NewBadgerDB(directoryPath string) (IRelationalDB, error) {
 }
 
 func closeDB(db *BadgerDB) error {
+
 	if atomic.LoadUint32(&db.closed) > 0 {
 		return nil
 	}
@@ -58,6 +59,7 @@ func closeDB(db *BadgerDB) error {
 	if err == nil {
 		atomic.StoreUint32(&db.closed, 1)
 	}
+
 	return err
 }
 
@@ -68,19 +70,23 @@ var iterOptionsNoValues = badger.IteratorOptions{
 	AllVersions:    false,
 }
 
-//region IRelationalDB implementation
+// region IRelationalDB implementation
 
 func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
+
 	err := db.Service.Update(func(txn *badger.Txn) error {
 		return txn.SetEntry(badger.NewEntry([]byte(prefix+key), value))
 	})
+
 	if err != nil {
 		golog.Error(err)
 	}
 }
 
 func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
+
 	var value []byte
+
 	err := db.Service.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(prefix + key))
 		if err != nil {
@@ -91,29 +97,37 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 			return nil
 		})
 	})
+
 	if err == badger.ErrKeyNotFound {
 		return nil, false
 	}
+
 	if err != nil {
 		golog.Error(err)
 		return nil, false
 	}
+
 	return value, true
 }
 
 func (db *BadgerDB) RawDelete(prefix string, key string) bool {
+
 	txn := db.Service.NewTransaction(true)
 	err := txn.Delete([]byte(prefix + key))
+
 	if err != nil {
 		golog.Error(err)
 		return false
 	}
+
 	return txn.Commit() == nil
 }
 
 func (db *BadgerDB) RawIterKey(prefix string, action func(key string) (stop bool)) {
+
 	txn := db.Service.NewTransaction(false)
 	defer txn.Discard()
+
 	iter := txn.NewIterator(iterOptionsNoValues)
 	defer iter.Close()
 
@@ -126,8 +140,10 @@ func (db *BadgerDB) RawIterKey(prefix string, action func(key string) (stop bool
 }
 
 func (db *BadgerDB) RawIterKV(prefix string, action func(key string, value []byte) (stop bool)) {
+
 	txn := db.Service.NewTransaction(false)
 	defer txn.Discard()
+
 	iter := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer iter.Close()
 
@@ -153,8 +169,8 @@ func (db *BadgerDB) Exist(tableName string, id string) bool {
 }
 
 func (db *BadgerDB) Print(tableName string) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
-//endregion
+// endregion
