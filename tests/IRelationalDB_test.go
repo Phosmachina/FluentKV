@@ -210,7 +210,7 @@ func Test_RemoveLink(t *testing.T) {
 	Link(o1Wrp, true, o2Wrp)
 	Link(o1Wrp, true, o3Wrp)
 
-	RemoveLink(o2Wrp, o1Wrp)
+	RemoveLinkWrp(o2Wrp, o1Wrp)
 
 	if !AllFromLinkWrp[SimpleType, AnotherType](o1Wrp)[0].Value.Equals(o3Wrp.Value) {
 		t.Error("Invalid link after link deletion.")
@@ -241,7 +241,7 @@ func Test_RemoveAllTableLink(t *testing.T) {
 	Link(o1Wrp, true, o4Wrp)
 	Link(o1Wrp, true, o5Wrp)
 
-	RemoveAllTableLink[SimpleType, AnotherType](o1Wrp)
+	RemoveAllTableLinkWrp[SimpleType, AnotherType](o1Wrp)
 
 	if obj := AllFromLinkWrp[SimpleType, AnotherType](o1Wrp); len(obj) != 0 {
 		t.Error("Links AnotherType are not deleted correctly.")
@@ -275,7 +275,8 @@ func Test_RemoveAllLink(t *testing.T) {
 	Link(o1Wrp, true, o4Wrp)
 	Link(o1Wrp, true, o5Wrp)
 
-	o1Wrp.RemoveAllLink()
+	RemoveAllLinkWrp(o1Wrp)
+
 	if len(AllFromLinkWrp[SimpleType, AnotherType](o1Wrp)) != 0 || len(AllFromLinkWrp[SimpleType,
 		SimpleType](o1Wrp)) != 0 {
 		t.Error("All link are not deleted.")

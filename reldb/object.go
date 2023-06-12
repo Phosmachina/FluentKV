@@ -147,8 +147,8 @@ func RemoveAllTableLinkWrp[S IObject, T IObject](s *ObjWrapper[S]) {
 	RemoveAllTableLink[S, T](s.db, s.ID)
 }
 
-// RemoveAllLinkWrp remove all link connected to this object.
-func RemoveAllLinkWrp[T IObject](db IRelationalDB, id string) {
+// RemoveAllLink remove all link connected to this object.
+func RemoveAllLink[T IObject](db IRelationalDB, id string) {
 
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		for _, s := range strings.Split(key, LinkDelimiter) {
@@ -161,9 +161,9 @@ func RemoveAllLinkWrp[T IObject](db IRelationalDB, id string) {
 	})
 }
 
-// RemoveAllLink remove all link connected to this object.
-func RemoveAllLink[T IObject](t *ObjWrapper[T]) {
-	RemoveAllLinkWrp(t.db, t.ID)
+// RemoveAllLinkWrp remove all link connected to this object.
+func RemoveAllLinkWrp[T IObject](t *ObjWrapper[T]) {
+	RemoveAllLink[T](t.db, t.ID)
 }
 
 // TODO make the Visit method test
