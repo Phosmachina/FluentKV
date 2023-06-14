@@ -358,6 +358,39 @@ func Test_FindAll(t *testing.T) {
 	}
 }
 
+func Test_Visit(t *testing.T) {
+	o1 := NewSimpleType("val for t1", "val for t2", 1)
+	o2 := NewSimpleType("val for t1", "val for t2", 2)
+	o3 := NewSimpleType("val for t1", "val for t2", 3)
+
+	o4 := NewAnotherType("val for t3", 4.5)
+	o5 := NewAnotherType("val for t3", 5.5)
+
+	db := prepareTest()
+
+	o1Wrp := Insert(db, o1)
+	o2Wrp := Insert(db, o2)
+	o3Wrp := Insert(db, o3)
+	_ = DeleteWrp(o3Wrp)
+	o4Wrp := Insert(db, o4)
+	o5Wrp := Insert(db, o5)
+
+	Link(o1Wrp, true, o2Wrp)
+	Link(o1Wrp, true, o4Wrp)
+	Link(o1Wrp, false, o5Wrp)
+
+	i := len(VisitWrp[SimpleType, AnotherType](o1Wrp))
+	s := VisitWrp[AnotherType,
+		SimpleType](o4Wrp)[0]
+	if i != 2 || s != o1Wrp.ID {
+		t.Error("Visit return an unexpected value.")
+	}
+	if len(VisitWrp[AnotherType, SimpleType](o5Wrp)) != 0 {
+		t.Error("Visit return an unexpected value.")
+	}
+	rawPrint(db)
+}
+
 func rawPrint(db IRelationalDB) {
 	db.RawIterKey("", func(key string) (stop bool) {
 		println(key)

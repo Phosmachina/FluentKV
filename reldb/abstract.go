@@ -251,16 +251,34 @@ func Delete[T IObject](db IRelationalDB, id string) error {
 	return db.Delete(tableName[T](), id)
 }
 
+// DeleteWrp the object determine with the id and the tableName induced by the T parameter.
+// id is released and related link are deleted.
+func DeleteWrp[T IObject](objWrp *ObjWrapper[T]) error {
+	return Delete[T](objWrp.db, objWrp.ID)
+}
+
 // DeepDelete the object determine with the id and the tableName induced by the T parameter and
 // all object directly connected.
 func DeepDelete[T IObject](db IRelationalDB, id string) error {
 	return db.DeepDelete(tableName[T](), id)
 }
 
+// DeepDeleteWrp the object determine with the id and the tableName induced by the T parameter and
+// all object directly connected.
+func DeepDeleteWrp[T IObject](objWrp *ObjWrapper[T]) error {
+	return DeepDelete[T](objWrp.db, objWrp.ID)
+}
+
 // Exist return true if the object determine with the id and the tableName induced by the T
 // parameter exist in db.
 func Exist[T IObject](db IRelationalDB, id string) bool {
 	return db.Exist(tableName[T](), id)
+}
+
+// ExistWrp return true if the object determine with the id and the tableName induced by the T
+// parameter exist in db.
+func ExistWrp[T IObject](objWrp *ObjWrapper[T]) bool {
+	return Exist[T](objWrp.db, objWrp.ID)
 }
 
 // Count return the count of object in the table based on the tableName induced by the T parameter.

@@ -47,7 +47,12 @@ func NewObjWrapper[T IObject](db IRelationalDB, ID string, value *T) *ObjWrapper
 //	                          s <- t
 func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ...*ObjWrapper[T]) {
 
+	if !ExistWrp(s) {
+		return
+	}
+
 	TName := tableName[T]()
+	SName := tableName[S]()
 
 	for _, v := range targets {
 		exist := s.db.Exist(TName, v.ID)
@@ -55,7 +60,11 @@ func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ..
 			golog.Warnf("Id '%s' not found and cannot be link.", v.ID)
 			continue
 		}
-		k := MakeLinkKey(s.Value.TableName(), s.ID, TName, v.ID)
+		if v.ID == s.ID {
+			golog.Warnf("Can't bind object himself...")
+			continue
+		}
+		k := MakeLinkKey(SName, s.ID, TName, v.ID)
 		if biDirectional {
 			s.db.RawSet(PrefixLink, k[1], nil)
 		}
@@ -66,6 +75,10 @@ func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ..
 // LinkNew same as Link but take IObject array and insert them in the db then return the resulting
 // wrapping.
 func LinkNew[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, objs ...T) []*ObjWrapper[T] {
+
+	if !ExistWrp(s) {
+		return nil
+	}
 
 	var objsWrp []*ObjWrapper[T]
 
@@ -176,8 +189,8 @@ func Visit[S IObject, T IObject](db IRelationalDB, id string) []string {
 	TName := tableName[T]()
 
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
-		if strings.HasPrefix(key, TName+Delimiter+id+LinkDelimiter+SName) {
-			resultIds = append(resultIds, key)
+		if strings.HasPrefix(key, SName+Delimiter+id+LinkDelimiter+TName) {
+			resultIds = append(resultIds, strings.Split(key, Delimiter)[2])
 		}
 		return false
 	})
