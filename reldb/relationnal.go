@@ -98,8 +98,6 @@ type IRelationalDB interface {
 	// FindAll iterate on values of tableName and apply the predicate: all values matched are
 	// returned.
 	FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject)
-
-	Print(tableName string) error
 }
 
 // region Helpers
@@ -125,7 +123,7 @@ func Encode(obj *IObject) []byte {
 	buffer := bytes.Buffer{}
 	err := gob.NewEncoder(&buffer).Encode(obj)
 	if err != nil {
-		// TODO add a logger
+		// TODO return err ; make some custom err
 		golog.Error(err)
 		return nil
 	}
@@ -140,7 +138,7 @@ func Decode(value []byte) *IObject {
 	buffer.Write(value)
 	err := gob.NewDecoder(&buffer).Decode(&object)
 	if err != nil {
-		// TODO add a logger? Or return nil/err
+		// TODO return nil/err ; make some custom err
 	}
 
 	return object

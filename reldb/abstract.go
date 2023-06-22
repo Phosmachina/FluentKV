@@ -46,7 +46,7 @@ func (db *AbstractRelDB) FreeKey(keys ...string) []error {
 }
 
 func (db *AbstractRelDB) CleanUnusedKey() {
-	// TODO implement me
+	// TODO verify the use case
 	panic("implement me")
 }
 
@@ -190,8 +190,8 @@ func (db *AbstractRelDB) FindAll(tableName string, predicate func(id string, val
 
 // region Fluent toolkit
 
-// tableName is a helper to call the TableName from T IObject implementation.
-func tableName[T IObject]() string {
+// TableName is a helper to call the TableName from T IObject implementation.
+func TableName[T IObject]() string {
 	var t T
 	return t.TableName()
 }
@@ -220,7 +220,7 @@ func SetWrp[T IObject](db IRelationalDB, objWrp ObjWrapper[T]) *ObjWrapper[T] {
 // Get the value in db based on id and the tableName induced by the T parameter.
 func Get[T IObject](db IRelationalDB, id string) *ObjWrapper[T] {
 
-	get := db.Get(tableName[T](), id)
+	get := db.Get(TableName[T](), id)
 
 	if get == nil {
 		return nil
@@ -236,7 +236,7 @@ func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjW
 
 	var t T
 
-	db.Update(tableName[T](), id, func(value IObject) IObject {
+	db.Update(TableName[T](), id, func(value IObject) IObject {
 		t = (value).(T)
 		editor(&t)
 		return t
@@ -248,7 +248,7 @@ func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjW
 // Delete the object determine with the id and the tableName induced by the T parameter.
 // id is released and related link are deleted.
 func Delete[T IObject](db IRelationalDB, id string) error {
-	return db.Delete(tableName[T](), id)
+	return db.Delete(TableName[T](), id)
 }
 
 // DeleteWrp the object determine with the id and the tableName induced by the T parameter.
@@ -260,7 +260,7 @@ func DeleteWrp[T IObject](objWrp *ObjWrapper[T]) error {
 // DeepDelete the object determine with the id and the tableName induced by the T parameter and
 // all object directly connected.
 func DeepDelete[T IObject](db IRelationalDB, id string) error {
-	return db.DeepDelete(tableName[T](), id)
+	return db.DeepDelete(TableName[T](), id)
 }
 
 // DeepDeleteWrp the object determine with the id and the tableName induced by the T parameter and
@@ -272,7 +272,7 @@ func DeepDeleteWrp[T IObject](objWrp *ObjWrapper[T]) error {
 // Exist return true if the object determine with the id and the tableName induced by the T
 // parameter exist in db.
 func Exist[T IObject](db IRelationalDB, id string) bool {
-	return db.Exist(tableName[T](), id)
+	return db.Exist(TableName[T](), id)
 }
 
 // ExistWrp return true if the object determine with the id and the tableName induced by the T
@@ -283,13 +283,13 @@ func ExistWrp[T IObject](objWrp *ObjWrapper[T]) bool {
 
 // Count return the count of object in the table based on the tableName induced by the T parameter.
 func Count[T IObject](db IRelationalDB) int {
-	return db.Count(MakePrefix(tableName[T]()))
+	return db.Count(MakePrefix(TableName[T]()))
 }
 
 // Foreach iterate on the table based on the tableName induced by the T parameter and execute the
 // do function on each value.
 func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
-	db.Foreach(tableName[T](), func(id string, value *IObject) {
+	db.Foreach(TableName[T](), func(id string, value *IObject) {
 		t := (*value).(T)
 		do(id, &t)
 	})
@@ -299,7 +299,7 @@ func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
 // predicate function on each value until it return true value: the current value is returned.
 func FindFirst[T IObject](db IRelationalDB, predicate func(id string, value *T) bool) *ObjWrapper[T] {
 
-	resultId, resultValue := db.FindFirst(tableName[T](), func(id string, value *IObject) bool {
+	resultId, resultValue := db.FindFirst(TableName[T](), func(id string, value *IObject) bool {
 		t := (*value).(T)
 		return predicate(id, &t)
 	})
@@ -318,7 +318,7 @@ func FindAll[T IObject](db IRelationalDB, predicate func(id string, value *T) bo
 
 	var objs []*ObjWrapper[T]
 
-	ids, results := db.FindAll(tableName[T](), func(id string, value *IObject) bool {
+	ids, results := db.FindAll(TableName[T](), func(id string, value *IObject) bool {
 		t := (*value).(T)
 		return predicate(id, &t)
 	})

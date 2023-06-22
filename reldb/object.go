@@ -51,8 +51,8 @@ func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ..
 		return
 	}
 
-	TName := tableName[T]()
-	SName := tableName[S]()
+	TName := TableName[T]()
+	SName := TableName[S]()
 
 	for _, v := range targets {
 		exist := s.db.Exist(TName, v.ID)
@@ -97,8 +97,8 @@ func LinkNew[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, objs ..
 func AllFromLink[S IObject, T IObject](db IRelationalDB, idOfS string) []*ObjWrapper[T] {
 
 	var results []*ObjWrapper[T]
-	SName := tableName[S]()
-	TName := tableName[T]()
+	SName := TableName[S]()
+	TName := TableName[T]()
 
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		if strings.HasPrefix(key, SName+Delimiter+idOfS+LinkDelimiter+TName) {
@@ -114,15 +114,15 @@ func AllFromLink[S IObject, T IObject](db IRelationalDB, idOfS string) []*ObjWra
 
 // AllFromLinkWrp returned all object, with the tableName induced by T, connected to the S object.
 func AllFromLinkWrp[S IObject, T IObject](s *ObjWrapper[S]) []*ObjWrapper[T] {
-	return AllFromLink[S, T](s.db, s.ID)
+	return AllFromLink[S, T](s.db, s.ID) // TODO check nil Wrapper value?
 }
 
 // RemoveLink remove all link between s and t object. Return true if the link s->t are deleted (is
 // at least the link created when isBidirectional == false).
 func RemoveLink[S IObject, T IObject](db IRelationalDB, idOfS string, idOfT string) bool {
 
-	SName := tableName[S]()
-	TName := tableName[T]()
+	SName := TableName[S]()
+	TName := TableName[T]()
 
 	k := MakeLinkKey(SName, idOfS, TName, idOfT)
 	db.RawDelete(PrefixLink, k[1])
@@ -139,8 +139,8 @@ func RemoveLinkWrp[S IObject, T IObject](s *ObjWrapper[S], t *ObjWrapper[T]) boo
 // RemoveAllTableLink remove all link between t object and object having the S tableName.
 func RemoveAllTableLink[S IObject, T IObject](db IRelationalDB, id string) {
 
-	SName := tableName[S]()
-	TName := tableName[T]()
+	SName := TableName[S]()
+	TName := TableName[T]()
 
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		split := strings.Split(key, LinkDelimiter)
@@ -185,8 +185,8 @@ func RemoveAllLinkWrp[T IObject](t *ObjWrapper[T]) {
 func Visit[S IObject, T IObject](db IRelationalDB, id string) []string {
 
 	var resultIds []string
-	SName := tableName[S]()
-	TName := tableName[T]()
+	SName := TableName[S]()
+	TName := TableName[T]()
 
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		if strings.HasPrefix(key, SName+Delimiter+id+LinkDelimiter+TName) {
