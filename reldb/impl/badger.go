@@ -168,9 +168,4 @@ func (db *BadgerDB) Exist(tableName string, id string) bool {
 	}) == nil
 }
 
-func (db *BadgerDB) Print(tableName string) error {
-	// TODO implement me
-	panic("implement me")
-}
-
 // endregion

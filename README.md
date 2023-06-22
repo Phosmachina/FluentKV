@@ -1,14 +1,36 @@
 # FluentKV
 
-> Purpose a fluent toolkit for using a KV storage.
+> Purpose a fluent toolkit for using a KV database.
 
 ## Architecture
 
 ### Interface and abstraction
 
+The interface **IRelationalDB** defines a set of raw operation must be implemented by the
+implementation and some more
+simple operation already implemented (but it could be overridden) by the abstraction. See the
+file `reldb/relational.go`
+for more details.
+
+The abstraction **AbstractRelDB** extend **IRelationalDB**. It pre implement the key filler system
+and all other operations with the usage of raw operations provide by the implementation.
+See the file `reldb/abstract.go` for more details.
+
 ### IObject and ObjWrapper
 
+The `IObject` interface define operations needed to this architecture. Some of them are basically
+implemented with the `DBObject` abstraction (like `Equals`,`Hash`). But the `TableName` operation
+need to be manually implement. This least is used to make the key associated with data.
+
+The `ObjWrapper` object is an helper to store a value and his unique id. It is commonly used across
+this toolkit to provide the IObject with the db or for return the value with the corresponding id.
+
 ### Implementation
+
+At this time, there is only one implementation for a KV Database :
+
+- [BadgerDB](https://github.com/dgraph-io/badger)
+- [Redis](https://redis.io) (Under consideration)
 
 ### Collection
 
@@ -27,9 +49,9 @@ Collection provide:
 - **`Distinct`:** Eliminate all duplicate.
 - **`Sort`:** Take the logic of sorting and sort the collection.
 - **`Filter`:** Take a predicate function and eliminate all not valid items.
-- **`Where`:** Like a `JOIN` but use the link concept used here.
+- **`Where`:** Like a `JOIN` but use the link concept of this library is used here.
 
-### Handlers
+### [TODO] Handlers
 
 > Register functions that will be executed on some event like **Insert**, **Delete** or **Update**.
 
@@ -67,7 +89,8 @@ internally affect the `DBObject` with the new instance created):
 ```go
 func NewPerson(firstname string, lastname string, age int) Person {
     person := Person{Firstname: firstname, Lastname: lastname, Age: age}
-    person.IObject = person // Mandatory (here or manualy before using).
+    person.IObject = person // Mandatory (here or manualy before using). 
+
     return person
 }
 ```
@@ -82,8 +105,6 @@ gob.Register(Person{})
 ### Basic operations
 
 ```go
-gob.Register(Person{})
-
 // Initialize db
 AutoKeyBuffer = 10
 db, _ := NewBadgerDB("data")
@@ -117,7 +138,7 @@ db, _ := NewBadgerDB("data")
   ```
 
 - **Link, LinkNew, UnlinkAll, RemoveLink, RemoveAllLink:**
-  Link concept allows to retrieve an object of another table linked to the current one. 
+  Link concept allows to retrieve an object of another table linked to the current one.
   ```go
   // It supposed we have a struct Address(Street string, City string) for example.
   
@@ -132,20 +153,57 @@ db, _ := NewBadgerDB("data")
   ```
 
 - **Delete, DeepDelete:**
-```go
+  ```go
+  addressWrp := Insert(db, NewAddress("", ""))
+  Link(addressWrp, true, personWrapped)
+  
+  DeepDeleteWrp[Address](addressWrp) // Delete addressWrp and personWrapped.
 
-```
-
+  // Or for delete only addressWrp:
+  // DeleteWrp[Address](addressWrp) 
+  ```
 
 - **FindFirst, FindAll:**
-```go
+  ```go
+  // Prepare a list of persons.
+  persons := []Person{
+      NewPerson("Jean", "Smith", 21),
+      NewPerson("Richard", "Smith", 25),
+      NewPerson("James", "Smith", 32),
+  }
+  
+  // Fill the db with this new person.
+  for _, person := range persons {
+      Insert(db, person)
+  }
+  
+  // Search the first person 25 years old (Richard):
+  result := FindFirst(db, func(id string, person *Person) bool {
+      return person.Age == 25
+  })
+  
+  // Or search all persons more than 22 years old (Richard, James):
+  results := FindFirst(db, func(id string, person *Person) bool {
+      return person.Age > 22
+  })
+  ```
 
-```
+- **Foreach, Visit:**
+  ```go
+  personWrp = Insert(db, NewPerson("Foo", "Bar", 42))
+  addressWrp := Insert(db, NewAddress("", ""))
 
-- **Visit, Foreach:**
-```go
+  Link(addressWrp, true, personWrp)
+    
+  // Foreach provide a way to perform some operation on a copy of each value of a table:
+  Foreach(db, func(id string, value *Person) {
+      // Use `id` and `value` here.
+  })
+  
+  // Visit permit to retreive all ids of object linked to another one:
+  ids := VisitWrp[Address, Person](addressWrp) 
+  // len(ids) == 1 ; ids[0] == personWrp.ID
+  ```
 
-```
-
-### More advanced operations
+### [TODO] More advanced operations
 
