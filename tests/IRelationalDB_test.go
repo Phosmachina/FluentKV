@@ -1,7 +1,7 @@
 package tests
 
 import (
-	. "git.antlia.tk/naxxar/FluentKV/reldb"
+	. "github.com/phosmachina/FluentKV/reldb"
 	"strconv"
 	"testing"
 )

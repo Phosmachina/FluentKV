@@ -1,7 +1,7 @@
 package tests
 
 import (
-	. "git.antlia.tk/naxxar/FluentKV/reldb"
+	. "github.com/phosmachina/FluentKV/reldb"
 	"testing"
 )
 
@@ -137,6 +137,10 @@ func Test_Filter(t *testing.T) {
 	}
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////////////////////////
 
 // TODO test complex cases based on SQL relevant situations (find them on https://sql.sh).
+
+func Test_SubQueries(t *testing.T) {
+
+}

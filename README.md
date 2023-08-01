@@ -2,54 +2,41 @@
 
 > Purpose a fluent toolkit for using a KV database.
 
-## Architecture
+## System Architecture
 
-### Interface and abstraction
+### Interface and Abstract Struct Implementation
 
-The interface **IRelationalDB** defines a set of raw operation must be implemented by the
-implementation and some more
-simple operation already implemented (but it could be overridden) by the abstraction. See the
-file `reldb/relational.go`
-for more details.
+The interface **IRelationalDB** defines a set of raw operations that must be implemented. It also holds some additional simpler operations already realized but they can be overridden if required. For further details, refer to the file `reldb/relational.go`.
 
-The abstraction **AbstractRelDB** extend **IRelationalDB**. It pre implement the key filler system
-and all other operations with the usage of raw operations provide by the implementation.
-See the file `reldb/abstract.go` for more details.
+The abstract struct **AbstractRelDB** extends **IRelationalDB**. It pre-implements the key filler system and all other operations using raw operations provided by the implementation. Check the file `reldb/abstract.go` for a comprehensive understanding.
 
-### IObject and ObjWrapper
+### IObject Interface and ObjWrapper Struct
 
-The `IObject` interface define operations needed to this architecture. Some of them are basically
-implemented with the `DBObject` abstraction (like `Equals`,`Hash`). But the `TableName` operation
-need to be manually implement. This least is used to make the key associated with data.
+The `IObject` interface contains operations essential for this architecture. These operations, such as `Equals`, `Hash`, are primarily implemented with the `DBObject` abstraction but the `TableName` function needs explicit implementation. This function generates a key corresponding to data.
 
-The `ObjWrapper` object is an helper to store a value and his unique id. It is commonly used across
-this toolkit to provide the IObject with the db or for return the value with the corresponding id.
+The `ObjWrapper` struct is a helper to store a value along with its unique id. It is used extensively across this toolkit to bind the IObject with the database or to return the value with its corresponding id.
 
 ### Implementation
 
-At this time, there is only one implementation for a KV Database :
+At present, there is one main implementation for a KV Database:
 
 - [BadgerDB](https://github.com/dgraph-io/badger)
-- [Redis](https://redis.io) (Under consideration)
+- [Redis](https://redis.io) (This is currently being considered)
 
 ### Collection
 
-> This purpose a simple way to make some operation on a list items provided by a TableName.
+> A straightforward way of performing operations on a list of items provided by a TableName.
 
-In SQL, you have some operation applied on a list of row. List of row are, in main case,
-provided with `FROM` command. The constructor of Collection take a DBObject type to build the
-corresponding objects array with the TableName.
+In SQL, certain operations are performed on a list of rows, usually fetched using the `FROM` command. The Collection's constructor accepts a DBObject type to build the subsequent objects array from the TableName.
 
-Many operations can be simply done with a Go code and loop. Because of that Collection not
-provide all SQL operations: you can easily get the underlying array with the `GetArray()`
-functions and make your logic on it.
+Several functions can be executed effortlessly using Go code and loops. Therefore, Collection doesn’t furnish all SQL operations: You can conveniently retrieve the underlying array via the `GetArray()` method and apply your logic on it.
 
-Collection provide:
+Collection provides:
 
-- **`Distinct`:** Eliminate all duplicate.
-- **`Sort`:** Take the logic of sorting and sort the collection.
-- **`Filter`:** Take a predicate function and eliminate all not valid items.
-- **`Where`:** Like a `JOIN` but use the link concept of this library is used here.
+- **`Distinct`:** Removes all duplicates.
+- **`Sort`:** Accepts a sorting function and arranges the collection accordingly.
+- **`Filter`:** Accepts a predicate function and excludes all items that fail the condition.
+- **`Where`:** Operates like a `JOIN` but uses the link concept of this library.
 
 ### [TODO] Handlers
 

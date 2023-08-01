@@ -2,8 +2,8 @@ package tests
 
 import (
 	"encoding/gob"
-	. "git.antlia.tk/naxxar/FluentKV/reldb"
-	. "git.antlia.tk/naxxar/FluentKV/reldb/impl"
+	. "github.com/phosmachina/FluentKV/reldb"
+	. "github.com/phosmachina/FluentKV/reldb/impl"
 	"os"
 )
 

@@ -3,9 +3,8 @@ package driver
 import (
 	"bytes"
 	"errors"
-	. "git.antlia.tk/naxxar/FluentKV/reldb"
 	"github.com/dgraph-io/badger"
-	"github.com/kataras/golog"
+	. "github.com/phosmachina/FluentKV/reldb"
 	"os"
 	"runtime"
 	"sync/atomic"
@@ -39,7 +38,7 @@ func NewBadgerDB(directoryPath string) (IRelationalDB, error) {
 
 	service, err := badger.Open(opts)
 	if err != nil {
-		golog.Errorf("unable to initialize the badger-based session database: %v", err)
+		// golog.Errorf("unable to initialize the badger-based session database: %v", err)
 		return nil, err
 	}
 
@@ -79,7 +78,7 @@ func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
 	})
 
 	if err != nil {
-		golog.Error(err)
+		// golog.Error(err)
 	}
 }
 
@@ -103,7 +102,7 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 	}
 
 	if err != nil {
-		golog.Error(err)
+		// golog.Error(err)
 		return nil, false
 	}
 
@@ -116,7 +115,7 @@ func (db *BadgerDB) RawDelete(prefix string, key string) bool {
 	err := txn.Delete([]byte(prefix + key))
 
 	if err != nil {
-		golog.Error(err)
+		// golog.Error(err)
 		return false
 	}
 

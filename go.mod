@@ -1,10 +1,9 @@
-module git.antlia.tk/naxxar/FluentKV
+module github.com/phosmachina/FluentKV
 
 go 1.19
 
 require (
 	github.com/dgraph-io/badger v1.6.2
-	github.com/kataras/golog v0.1.8
 )
 
 require (
