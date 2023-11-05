@@ -1,4 +1,8 @@
-# FluentKV
+
+<h1 align="center">
+    <img src="docs/FluentKV_banner.svg" alt="Banner" style="text-align: center; width: 70%">
+</h1>
+
 
 > Purpose a fluent toolkit for using a KV database.
 
