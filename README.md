@@ -3,6 +3,12 @@
     <img src="docs/FluentKV_banner.svg" alt="Banner" style="text-align: center; width: 70%">
 </h1>
 
+<div align="center">
+
+[![GoDoc](https://godoc.org/github.com/Phosmachina/FluentKV?status.svg)](https://pkg.go.dev/github.com/Phosmachina/FluentKV#section-documentation)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Phosmachina/FluentKV)](https://goreportcard.com/badge/github.com/Phosmachina/FluentKV)
+
+</div>
 
 > Purpose a fluent toolkit for using a KV database.
 

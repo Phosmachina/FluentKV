@@ -1,7 +1,7 @@
 package tests
 
 import (
-	. "github.com/phosmachina/FluentKV/reldb"
+	. "github.com/Phosmachina/FluentKV/reldb"
 	"strconv"
 	"testing"
 )

@@ -2,8 +2,7 @@ package tests
 
 import (
 	"encoding/gob"
-	. "github.com/phosmachina/FluentKV/reldb"
-	. "github.com/phosmachina/FluentKV/reldb/impl"
+	. "github.com/Phosmachina/FluentKV/reldb"
 	"os"
 )
 

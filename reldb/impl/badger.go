@@ -3,8 +3,8 @@ package driver
 import (
 	"bytes"
 	"errors"
+	. "github.com/Phosmachina/FluentKV/reldb"
 	"github.com/dgraph-io/badger"
-	. "github.com/phosmachina/FluentKV/reldb"
 	"os"
 	"runtime"
 	"sync/atomic"

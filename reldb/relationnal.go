@@ -5,7 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/kataras/golog"
+	"log"
 	"reflect"
 )
 
@@ -124,7 +124,7 @@ func Encode(obj *IObject) []byte {
 	err := gob.NewEncoder(&buffer).Encode(obj)
 	if err != nil {
 		// TODO return err ; make some custom err
-		golog.Error(err)
+		log.Printf(err.Error())
 		return nil
 	}
 

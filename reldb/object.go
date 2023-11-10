@@ -3,7 +3,7 @@ package fluentkv
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/kataras/golog"
+	"log"
 	"strings"
 )
 
@@ -57,11 +57,11 @@ func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ..
 	for _, v := range targets {
 		exist := s.db.Exist(TName, v.ID)
 		if !exist {
-			golog.Warnf("Id '%s' not found and cannot be link.", v.ID)
+			log.Printf("Id '%s' not found and cannot be link.", v.ID)
 			continue
 		}
 		if v.ID == s.ID {
-			golog.Warnf("Can't bind object himself...")
+			log.Printf("Can't bind object himself...")
 			continue
 		}
 		k := MakeLinkKey(SName, s.ID, TName, v.ID)

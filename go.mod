@@ -1,4 +1,4 @@
-module github.com/phosmachina/FluentKV
+module github.com/Phosmachina/FluentKV
 
 go 1.21
 
