@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"testing"
 )
@@ -11,7 +12,7 @@ func Test_NewCollection(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -32,7 +33,7 @@ func Test_Sort(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -57,7 +58,7 @@ func Test_Distinct(t *testing.T) {
 		NewSimpleType("duplicate2", "duplicate2", 2),
 		NewSimpleType("duplicate2", "duplicate2", 2),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -87,7 +88,7 @@ func Test_Where(t *testing.T) {
 		NewAnotherType("", 15),
 		NewAnotherType("", 7.12),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for i, obj := range objs {
 		objWrp := Insert(db, obj)
@@ -119,7 +120,7 @@ func Test_Filter(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -143,4 +144,21 @@ func Test_Filter(t *testing.T) {
 
 func Test_SubQueries(t *testing.T) {
 
+}
+
+// //////////////////////////////////////////////////////////////////////////////////////////////////
+
+func Benchmark_NewCollection(b *testing.B) {
+
+	db := prepareTest(b.TempDir())
+	for i := 0; i < b.N; i++ {
+		Insert(db, NewSimpleType("val for t1", "val for t2", 986))
+	}
+
+	fmt.Println("New test with:", b.N, "it")
+	b.ResetTimer()
+
+	NewCollection[SimpleType](db)
+
+	b.Cleanup(db.Close)
 }
