@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"testing"
 )
@@ -11,17 +12,22 @@ func Test_NewCollection(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
 	}
 
 	collection := NewCollection[SimpleType](db)
-	for i, objWrp := range collection.GetArray() {
-		if !objWrp.Value.Equals(objs[i]) {
-			t.Error("Array from collection are not equal to the original array.")
-			break
+	if collection.Len() != 3 {
+		t.Fatal("The collection has not the expected count of objects after creation.")
+	}
+	for _, objWrp := range collection.GetArray() {
+		index := IndexOf(objWrp.Value, objs)
+		if index == -1 {
+			t.Fatal("Missing or unexpected element in the result.")
+		} else {
+			objs = append(objs[:index], objs[index+1:]...)
 		}
 	}
 }
@@ -32,7 +38,7 @@ func Test_Sort(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -57,7 +63,7 @@ func Test_Distinct(t *testing.T) {
 		NewSimpleType("duplicate2", "duplicate2", 2),
 		NewSimpleType("duplicate2", "duplicate2", 2),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -69,9 +75,12 @@ func Test_Distinct(t *testing.T) {
 	if collection.Len() != 3 {
 		t.Fatal("The collection has not the expected count of objects after Distinct.")
 	}
-	for i, objWrp := range collection.GetArray() {
-		if !objWrp.Value.Equals(objs[i*2]) {
-			t.Fatal("Not expected value, the arrays is corrupted or not in correct order after Distinct.")
+	for _, objWrp := range collection.GetArray() {
+		index := IndexOf(objWrp.Value, objs)
+		if index == -1 {
+			t.Fatal("Missing or unexpected element in the result.")
+		} else {
+			objs = append(objs[:index], objs[index+1:]...)
 		}
 	}
 }
@@ -87,7 +96,7 @@ func Test_Where(t *testing.T) {
 		NewAnotherType("", 15),
 		NewAnotherType("", 7.12),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for i, obj := range objs {
 		objWrp := Insert(db, obj)
@@ -105,10 +114,12 @@ func Test_Where(t *testing.T) {
 	if collection.Len() != 2 {
 		t.Fatal("The collection has not the expected count of objects after Where.")
 	}
-	for i, o := range collection.GetArray() {
-		if !o.Value.Equals(objs[i]) {
-			t.Fatal("Not expected value, " +
-				"the arrays is corrupted or not in correct order after Where.")
+	for _, objWrp := range collection.GetArray() {
+		index := IndexOf(objWrp.Value, objs)
+		if index == -1 {
+			t.Fatal("Missing or unexpected element in the result.")
+		} else {
+			objs = append(objs[:index], objs[index+1:]...)
 		}
 	}
 }
@@ -119,7 +130,7 @@ func Test_Filter(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -143,4 +154,21 @@ func Test_Filter(t *testing.T) {
 
 func Test_SubQueries(t *testing.T) {
 
+}
+
+// //////////////////////////////////////////////////////////////////////////////////////////////////
+
+func Benchmark_NewCollection(b *testing.B) {
+
+	db := prepareTest(b.TempDir())
+	for i := 0; i < b.N; i++ {
+		Insert(db, NewSimpleType("val for t1", "val for t2", i))
+	}
+
+	fmt.Println("New test with:", b.N, "it")
+	b.ResetTimer()
+
+	NewCollection[SimpleType](db)
+
+	b.Cleanup(db.Close)
 }

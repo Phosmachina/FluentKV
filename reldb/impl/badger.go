@@ -3,6 +3,7 @@ package driver
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"github.com/dgraph-io/badger"
 	"os"
@@ -38,15 +39,19 @@ func NewBadgerDB(directoryPath string) (IRelationalDB, error) {
 
 	service, err := badger.Open(opts)
 	if err != nil {
-		// golog.Errorf("unable to initialize the badger-based session database: %v", err)
+		fmt.Printf("unable to initialize the badger-based session database: %v", err)
 		return nil, err
 	}
 
 	db := &BadgerDB{Service: service}
-	db.IRelationalDB = db
+	db.AbstractRelDB = *NewAbstractRelDB(db)
 	runtime.SetFinalizer(db, closeDB)
 
 	return db, nil
+}
+
+func (db *BadgerDB) Close() {
+	_ = closeDB(db)
 }
 
 func closeDB(db *BadgerDB) error {
@@ -78,7 +83,7 @@ func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
 	})
 
 	if err != nil {
-		// golog.Error(err)
+		// TODO golog.Error(err)
 	}
 }
 
@@ -97,7 +102,7 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 		})
 	})
 
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		return nil, false
 	}
 
@@ -147,14 +152,11 @@ func (db *BadgerDB) RawIterKV(prefix string, action func(key string, value []byt
 	defer iter.Close()
 
 	pfx := []byte(prefix)
+	var value []byte
 	for iter.Seek(pfx); iter.ValidForPrefix(pfx); iter.Next() {
-		var value []byte
-		_ = iter.Item().Value(func(valueBytes []byte) error {
-			value = valueBytes
-			return nil
-		})
+		valueCopy, _ := iter.Item().ValueCopy(value)
 
-		if action(string(bytes.TrimPrefix(iter.Item().Key(), pfx)), value) {
+		if action(string(bytes.TrimPrefix(iter.Item().Key(), pfx)), valueCopy) {
 			return
 		}
 	}

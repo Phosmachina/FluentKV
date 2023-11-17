@@ -22,10 +22,12 @@ type Collection[T IObject] struct {
 }
 
 func NewCollection[T IObject](db IRelationalDB) *Collection[T] {
+
 	var list []*ObjWrapper[T]
 	Foreach[T](db, func(id string, value *T) {
 		list = append(list, NewObjWrapper(db, id, value))
 	})
+
 	return &Collection[T]{objects: list}
 }
 
@@ -34,6 +36,7 @@ func (c *Collection[T]) GetArray() []*ObjWrapper[T] {
 	return c.objects
 }
 
+// Sort the collection with the given function used as comparator for each element.
 func (c *Collection[T]) Sort(
 	comparator func(x, y *ObjWrapper[T]) bool,
 ) *Collection[T] {
@@ -44,11 +47,13 @@ func (c *Collection[T]) Sort(
 	return c
 }
 
-// Distinct ; simply eliminate all duplicate from the collection.
+// Distinct eliminate all duplicates from the collection.
 //
 // The underlying ObjWrapper array is modified with this operation.
 func (c *Collection[T]) Distinct() *Collection[T] {
+
 	allKeys := make(map[string]bool)
+
 	var list []*ObjWrapper[T]
 	for _, object := range c.objects {
 		if _, value := allKeys[object.Value.Hash()]; !value {
@@ -57,11 +62,12 @@ func (c *Collection[T]) Distinct() *Collection[T] {
 		}
 	}
 	c.objects = list
+
 	return c
 }
 
-// Where ; this function consider a collection and the connected collection induced by Link (
-// probably used in a same way for each element of the collection).
+// Where ; this function considers a collection and the connected collection induced by
+// Link (probably used in a same way for each element of the collection).
 //
 // For each object in collection the predicate is applied with the current object and all
 // connected object given by an AllFromLink operation. If the predicate returns true,
@@ -69,7 +75,7 @@ func (c *Collection[T]) Distinct() *Collection[T] {
 //
 // If the option firstOnly is set to true, only the first result of AllFromLink is retained.
 //
-// Obviously, the result of unlink can be nil and predicate function must manage this case.
+// The result of unlink can be nil and predicate function must manage this case.
 func Where[T IObject, K IObject](
 	firstOnly bool,
 	collection *Collection[T],
@@ -110,7 +116,7 @@ func (c *Collection[T]) Filter(
 			list = append(list, objWrp)
 		}
 	}
-
 	c.objects = list
+
 	return c
 }

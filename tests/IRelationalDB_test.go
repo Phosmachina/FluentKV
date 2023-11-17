@@ -8,7 +8,7 @@ import (
 
 func Test_RawSetRawGet_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	iObject := IObject(object)
 	db.RawSet("tbl%SimpleType_", "0", Encode(&iObject))
@@ -26,7 +26,7 @@ func Test_RawSetRawGet_SimpleType(t *testing.T) {
 
 func Test_InsertGet_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	insertedValue := Insert(db, object)
 	if !insertedValue.Value.Equals(object) {
@@ -39,9 +39,57 @@ func Test_InsertGet_SimpleType(t *testing.T) {
 	}
 }
 
+func Test_AutoKey(t *testing.T) {
+	tempDir := t.TempDir()
+	AutoKeyBuffer = 15
+	db := prepareTest(tempDir)
+
+	for i := 0; i < 10; i++ {
+		insert := Insert(db, NewSimpleType("", "", i))
+		if insert.ID != strconv.Itoa(i) {
+			t.Error("Not expected id after INSERT.")
+		}
+	}
+	for i := 0; i < 5; i++ {
+		err := Delete[SimpleType](db, strconv.Itoa(i))
+		if err != nil {
+			t.Error("DELETE at key", i)
+		}
+	}
+	orderedNextIds := []string{"10", "11", "12", "13", "14", "0", "1", "2", "3", "4", "15", "16", "17", "18", "19"}
+	for i := 0; i < 15; i++ {
+		insert := Insert(db, NewAnotherType("", float32(i)))
+		if insert.ID != orderedNextIds[i] {
+			t.Error("Not expected id after INSERT.")
+		}
+	}
+	for i := 5; i < 10; i++ { // 10, 12, 14, 16, 18
+		err := Delete[AnotherType](db, strconv.Itoa(i*2))
+		if err != nil {
+			t.Error("DELETE at key", i)
+		}
+	}
+
+	db.Close()
+	AutoKeyBuffer = 15
+	db = prepareTest(tempDir)
+
+	nextIds := []string{"10", "12", "14", "16", "18", "20", "21", "22", "23", "24", "25",
+		"26", "27", "28", "29"}
+	for i := 0; i < 15; i++ {
+		insert := Insert(db, NewAnotherType("", float32(i)))
+		indexOf := IndexOf(insert.ID, nextIds)
+		if indexOf == -1 {
+			t.Error("Not expected id after INSERT.")
+		} else {
+			nextIds = append(nextIds[:indexOf], nextIds[indexOf+1:]...)
+		}
+	}
+}
+
 func Test_Set_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	id := Insert(db, object).ID
 	object.Val = 12
@@ -54,7 +102,7 @@ func Test_Set_SimpleType(t *testing.T) {
 
 func Test_Update_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	id := Insert(db, object).ID
 	Update(db, id, func(value *SimpleType) {
@@ -70,7 +118,7 @@ func Test_Update_SimpleType(t *testing.T) {
 
 func Test_Exist(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	id := Insert(db, object).ID
 
@@ -84,7 +132,7 @@ func Test_Exist(t *testing.T) {
 
 func Test_Count(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	Insert(db, object)
 
@@ -101,7 +149,7 @@ func Test_Link(t *testing.T) {
 	o1 := NewSimpleType("val for t1", "val for t2", 1)
 	o2 := NewSimpleType("val for t1", "val for t2", 2)
 	o3 := NewSimpleType("val for t1", "val for t2", 3)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -125,7 +173,7 @@ func Test_Link(t *testing.T) {
 func Test_Delete(t *testing.T) {
 	o1 := NewSimpleType("val for t1", "val for t2", 1)
 	o2 := NewSimpleType("val for t1", "val for t2", 2)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	idO2 := LinkNew(Insert(db, o1), true, o2)[0].ID
 
@@ -143,7 +191,7 @@ func Test_DeepDelete_0(t *testing.T) {
 	o1 := NewSimpleType("val for t1", "val for t2", 1)
 	o2 := NewSimpleType("val for t1", "val for t2", 2)
 	o3 := NewSimpleType("val for t1", "val for t2", 3)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -172,7 +220,7 @@ func Test_DeepDelete_1(t *testing.T) {
 	o1 := NewSimpleType("val for t1", "val for t2", 1)
 	o2 := NewSimpleType("val for t1", "val for t2", 2)
 	o3 := NewSimpleType("val for t1", "val for t2", 3)
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -201,7 +249,7 @@ func Test_RemoveLink(t *testing.T) {
 	o2 := NewAnotherType("t3", 1.1)
 	o3 := NewAnotherType("val for t3", 4.5)
 
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -228,7 +276,7 @@ func Test_RemoveAllTableLink(t *testing.T) {
 	o4 := NewAnotherType("val for t3", 4.5)
 	o5 := NewAnotherType("val for t3", 5.5)
 
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -262,7 +310,7 @@ func Test_RemoveAllLink(t *testing.T) {
 	o4 := NewAnotherType("val for t3", 4.5)
 	o5 := NewAnotherType("val for t3", 5.5)
 
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -289,7 +337,7 @@ func Test_Foreach(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -309,7 +357,7 @@ func Test_FindFirst(t *testing.T) {
 		NewSimpleType("val for t1", "val for t2", 2),
 		NewSimpleType("val for t1", "val for t2", 3),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -335,7 +383,7 @@ func Test_FindAll(t *testing.T) {
 		NewSimpleType("specific", "val for t2", 1),
 		NewSimpleType("specific", "val for t2", 2),
 	}
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	for _, obj := range objs {
 		Insert(db, obj)
@@ -351,9 +399,12 @@ func Test_FindAll(t *testing.T) {
 	if len(all) != len(common) {
 		t.Fatal("FindAll not return the expected count of results.")
 	}
-	for i, obj := range all {
-		if !obj.Value.Equals(common[i]) {
+	for _, obj := range all {
+		index := IndexOf(obj.Value, common)
+		if index == -1 {
 			t.Error("FindAll return an unexpected value.")
+		} else {
+			common = append(common[:index], common[index+1:]...)
 		}
 	}
 }
@@ -366,7 +417,7 @@ func Test_Visit(t *testing.T) {
 	o4 := NewAnotherType("val for t3", 4.5)
 	o5 := NewAnotherType("val for t3", 5.5)
 
-	db := prepareTest()
+	db := prepareTest(t.TempDir())
 
 	o1Wrp := Insert(db, o1)
 	o2Wrp := Insert(db, o2)
@@ -396,4 +447,49 @@ func rawPrint(db IRelationalDB) {
 		println(key)
 		return false
 	})
+}
+
+// //////////////////////////////////////////////////////////////////////////////////////////////////
+
+func Benchmark_InsertGet_SimpleType(b *testing.B) {
+
+	var objects []SimpleType
+	for i := 0; i < b.N; i++ {
+		objects = append(objects, NewSimpleType("val for t1", "val for t2", i))
+	}
+	db := prepareTest(b.TempDir())
+
+	b.ResetTimer()
+
+	var result *ObjWrapper[SimpleType]
+	pool := NewTaskPool()
+	for i := 0; i < b.N; i++ {
+		tmp := objects[i]
+		pool.AddTask(func() {
+			simpleTypeWrp := Insert(db, tmp)
+			result = Get[SimpleType](db, simpleTypeWrp.ID)
+		})
+	}
+	_ = result
+	pool.Close()
+
+	b.Cleanup(db.Close)
+}
+
+func Benchmark_Foreach(b *testing.B) {
+
+	db := prepareTest(b.TempDir())
+	for i := 0; i < b.N; i++ {
+		Insert(db, NewSimpleType("val for t1", "val for t2", 1))
+	}
+
+	b.ResetTimer()
+
+	var result *SimpleType
+	Foreach(db, func(id string, value *SimpleType) {
+		result = value
+	})
+	_ = result
+
+	b.Cleanup(db.Close)
 }

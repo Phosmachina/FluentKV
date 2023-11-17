@@ -1,58 +1,102 @@
 package fluentkv
 
 import (
-	"errors"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // AbstractRelDB pre-implement IRelationalDB,
-// you need to set value of interface: methods implemented are used in abstract.
-type AbstractRelDB struct{ IRelationalDB }
+// you need to set the value of interface: methods implemented are used in abstract.
+type AbstractRelDB struct {
+	IRelationalDB
+	availableKeys []string
+	usedKeys      []string
+	m             sync.Mutex
+}
 
-func (db *AbstractRelDB) GetNextKey() string {
+// NewAbstractRelDB initialize internal IRelationalDB and read db to determine current
+// available and used keys.
+func NewAbstractRelDB(db IRelationalDB) *AbstractRelDB {
+	relDB := AbstractRelDB{}
+	relDB.IRelationalDB = db
 
-	var key string
-
-	if db.Count(PreAutoKavlb) == 0 { // Check tank have available keys for this table.
-		cur := db.Count(PreAutoKused)
-		for i := cur; i < cur+AutoKeyBuffer; i++ {
-			db.RawSet(PreAutoKavlb, strconv.Itoa(i), nil)
+	maxVal := 0
+	db.RawIterKey(PrefixTable, func(key string) (stop bool) {
+		id := strings.Split(key, Delimiter)[1]
+		relDB.usedKeys = append(relDB.usedKeys, id)
+		val, _ := strconv.Atoi(id)
+		if maxVal < val {
+			maxVal = val
+		}
+		return false
+	})
+	for i := 0; i < AutoKeyBuffer*(1+maxVal/AutoKeyBuffer); i++ {
+		key := strconv.Itoa(i)
+		if IndexOf(key, relDB.usedKeys) == -1 {
+			relDB.availableKeys = append(relDB.availableKeys, key)
 		}
 	}
 
-	db.RawIterKey(PreAutoKavlb, func(k string) (stop bool) { // Get next key.
-		key = k
-		_ = db.RawDelete(PreAutoKavlb, k)
-		return true
-	})
+	return &relDB
+}
+
+func (db *AbstractRelDB) GetKey() string {
+
+	db.m.Lock()
+
+	var key string
+
+	if db.availableKeys == nil {
+		db.availableKeys = []string{}
+		db.RawIterKey(PreAutoKavlb, func(k string) (stop bool) { // Get the next key.
+			db.availableKeys = append(db.availableKeys, k)
+			return false
+		})
+	}
+
+	if len(db.usedKeys) == 0 {
+		db.RawIterKey(PreAutoKused, func(key string) (stop bool) {
+			db.usedKeys = append(db.usedKeys, key)
+			return false
+		})
+	}
+
+	if len(db.availableKeys) == 0 {
+		for i := len(db.usedKeys); i < len(db.usedKeys)+AutoKeyBuffer; i++ {
+			db.availableKeys = append(db.availableKeys, strconv.Itoa(i))
+		}
+	}
+
+	key = db.availableKeys[0]
+	db.usedKeys = append(db.usedKeys, key)
+	db.availableKeys = db.availableKeys[1:]
+
+	db.m.Unlock()
 
 	return key
 }
 
-func (db *AbstractRelDB) FreeKey(keys ...string) []error {
+func (db *AbstractRelDB) FreeKey(keys ...string) {
 
-	var errs []error
+	db.m.Lock()
 
 	for _, key := range keys {
-		if !db.RawDelete(PreAutoKused, key) {
-			errs = append(errs, errors.New("invalid id for FreeKey: "+key))
-		} else {
-			db.RawSet(PreAutoKavlb, key, nil)
+		if index := IndexOf(key, db.usedKeys); index != -1 {
+			// Remove key from usedKeys
+			db.usedKeys = append(db.usedKeys[:index], db.usedKeys[index+1:]...)
+
+			// Add key to availableKeys
+			db.availableKeys = append(db.availableKeys, key)
 		}
 	}
 
-	return errs
-}
-
-func (db *AbstractRelDB) CleanUnusedKey() {
-	// TODO verify the use case
-	panic("implement me")
+	db.m.Unlock()
 }
 
 func (db *AbstractRelDB) Insert(object IObject) string {
 
-	id := db.GetNextKey()
+	id := db.GetKey()
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
 
 	return id
@@ -137,7 +181,6 @@ func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
 func (db *AbstractRelDB) Count(prefix string) int {
 
 	var ct = 0
-
 	db.RawIterKey(prefix, func(key string) (stop bool) {
 		ct++
 		return false
@@ -147,16 +190,28 @@ func (db *AbstractRelDB) Count(prefix string) int {
 }
 
 func (db *AbstractRelDB) Foreach(tableName string, do func(id string, value *IObject)) {
+
+	pool := NewTaskPool()
+
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		do(key, Decode(value))
+		valCp := value
+		keyCp := key
+		pool.AddTask(
+			func() {
+				decode := Decode(valCp)
+				do(keyCp, decode)
+			})
 		return false
 	})
+
+	pool.Close()
 }
 
 func (db *AbstractRelDB) FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject) {
 
 	var resultId = ""
 	var resultValue *IObject
+	// TODO parallelized inner operation
 
 	db.RawIterKV(MakePrefix(tableName), func(curId string, value []byte) (stop bool) {
 		tmpObj := Decode(value)
@@ -176,14 +231,22 @@ func (db *AbstractRelDB) FindAll(tableName string, predicate func(id string, val
 	var resultIds []string
 	var resultValues []*IObject
 
+	pool := NewTaskPool()
+
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		curObj := Decode(value)
-		if predicate(key, curObj) {
-			resultIds = append(resultIds, key)
-			resultValues = append(resultValues, curObj)
-		}
+		valCp := value
+		keyCp := key
+		pool.AddTask(func() {
+			curObj := Decode(valCp)
+			if predicate(keyCp, curObj) {
+				resultIds = append(resultIds, keyCp)
+				resultValues = append(resultValues, curObj)
+			}
+		})
 		return false
 	})
+
+	pool.Close()
 
 	return resultIds, resultValues
 }
@@ -286,8 +349,8 @@ func Count[T IObject](db IRelationalDB) int {
 	return db.Count(MakePrefix(TableName[T]()))
 }
 
-// Foreach iterate on the table based on the tableName induced by the T parameter and execute the
-// do function on each value.
+// Foreach iterating on the table based on the tableName induced by the T parameter
+// and execute the do function on each value.
 func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
 	db.Foreach(TableName[T](), func(id string, value *IObject) {
 		t := (*value).(T)
