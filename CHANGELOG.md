@@ -1,6 +1,6 @@
 # Changelog
 
-## Vnext
+## v0.1.4
 
 ### Feature
 
@@ -14,7 +14,7 @@
 
 - Add `Test_AutoKey` to check auto key feature and analyze at the re-opening database.
 - Add some benchmark for general operation:
-  - `InsertGet_SimpleType`
+  - `InsertGet`
   - `Foreach`
   - `NewCollection`
 

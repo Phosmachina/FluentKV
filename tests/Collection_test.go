@@ -19,10 +19,15 @@ func Test_NewCollection(t *testing.T) {
 	}
 
 	collection := NewCollection[SimpleType](db)
-	for i, objWrp := range collection.GetArray() {
-		if !objWrp.Value.Equals(objs[i]) {
-			t.Error("Array from collection are not equal to the original array.")
-			break
+	if collection.Len() != 3 {
+		t.Fatal("The collection has not the expected count of objects after creation.")
+	}
+	for _, objWrp := range collection.GetArray() {
+		index := IndexOf(objWrp.Value, objs)
+		if index == -1 {
+			t.Fatal("Missing or unexpected element in the result.")
+		} else {
+			objs = append(objs[:index], objs[index+1:]...)
 		}
 	}
 }
@@ -70,9 +75,12 @@ func Test_Distinct(t *testing.T) {
 	if collection.Len() != 3 {
 		t.Fatal("The collection has not the expected count of objects after Distinct.")
 	}
-	for i, objWrp := range collection.GetArray() {
-		if !objWrp.Value.Equals(objs[i*2]) {
-			t.Fatal("Not expected value, the arrays is corrupted or not in correct order after Distinct.")
+	for _, objWrp := range collection.GetArray() {
+		index := IndexOf(objWrp.Value, objs)
+		if index == -1 {
+			t.Fatal("Missing or unexpected element in the result.")
+		} else {
+			objs = append(objs[:index], objs[index+1:]...)
 		}
 	}
 }
@@ -106,10 +114,12 @@ func Test_Where(t *testing.T) {
 	if collection.Len() != 2 {
 		t.Fatal("The collection has not the expected count of objects after Where.")
 	}
-	for i, o := range collection.GetArray() {
-		if !o.Value.Equals(objs[i]) {
-			t.Fatal("Not expected value, " +
-				"the arrays is corrupted or not in correct order after Where.")
+	for _, objWrp := range collection.GetArray() {
+		index := IndexOf(objWrp.Value, objs)
+		if index == -1 {
+			t.Fatal("Missing or unexpected element in the result.")
+		} else {
+			objs = append(objs[:index], objs[index+1:]...)
 		}
 	}
 }

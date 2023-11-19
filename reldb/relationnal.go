@@ -14,7 +14,7 @@ var (
 
 	// PreAutoKavlb prefix for available key.
 	PreAutoKavlb = "tank%avlb_"
-	// PreAutoKused prefix for used key.
+	// PreAutoKused prefix for used keys.
 	PreAutoKused = "tank%used_"
 	// PrefixLink prefix for a link declaration.
 	PrefixLink = "link%"
@@ -33,19 +33,20 @@ IRelationalDB is a small interface to define some operation with a storage used 
 
 # Key
 
-In first, the underlying storage should be work like a KV DB. In consequence,
+At first, the underlying storage should work like a KV DB. In consequence,
 a key is structured to store a flattened hierarchy.
   - Key: internalTypePrefix, suffix
-  - Key for concrete type: internalTypePrefix, tableName, id
+  - Key for concrete types: internalTypePrefix, tableName, id
 
-To make uniq key, a tank key system is implemented and can be used with GetNextKey,
-FreeKey. The global AutoKeyBuffer defined the size of this tank. When value is inserted,
-a key is pick in tank. When entry is deleted, the key become available again via GetNextKey.
+To make uniq key, a tank key system is implemented and can be used with GetKey,
+FreeKey. The global AutoKeyBuffer defined the size of this tank. When the value is inserted,
+a key is picked in the tank. When entry is deleted, the key becomes available again via GetKey.
 
 # Operators
 
-Interface is designed so that all raw operator must be implemented ; other can be but are already
-implement in the abstraction AbstractRelDB. Raw Operators probably work directly with the db driver and are used by all other operators.
+Interface is designed so that all raw operators must be implemented; other can be but are already
+
+	implemented in the abstraction AbstractRelDB. Raw Operators probably work directly with the db driver and are used by all other operators.
 */
 type IRelationalDB interface {
 	// GetKey pick a key in tank of unique keys.
@@ -163,7 +164,7 @@ func NameOfStruct[T any]() string {
 	return reflect.TypeOf((*T)(nil)).Elem().Name()
 }
 
-// ToString print the name of type and all field name with the corresponding value.
+// ToString prints the name of type and all field names with the corresponding value.
 func ToString(v any) string {
 
 	typeOf := reflect.TypeOf(v)

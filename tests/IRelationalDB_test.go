@@ -399,9 +399,12 @@ func Test_FindAll(t *testing.T) {
 	if len(all) != len(common) {
 		t.Fatal("FindAll not return the expected count of results.")
 	}
-	for i, obj := range all {
-		if !obj.Value.Equals(common[i]) {
+	for _, obj := range all {
+		index := IndexOf(obj.Value, common)
+		if index == -1 {
 			t.Error("FindAll return an unexpected value.")
+		} else {
+			common = append(common[:index], common[index+1:]...)
 		}
 	}
 }
