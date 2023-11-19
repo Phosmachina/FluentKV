@@ -61,7 +61,7 @@ func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ..
 			continue
 		}
 		if v.ID == s.ID {
-			log.Printf("Can't bind object himself...")
+			log.Println("Can't bind object himself...")
 			continue
 		}
 		k := MakeLinkKey(SName, s.ID, TName, v.ID)

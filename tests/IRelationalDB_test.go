@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"strconv"
 	"testing"
@@ -36,6 +37,54 @@ func Test_InsertGet_SimpleType(t *testing.T) {
 	getResult := Get[SimpleType](db, insertedValue.ID)
 	if !getResult.Value.Equals(object) {
 		t.Error("Values not equals after GET.")
+	}
+}
+
+func Test_AutoKey(t *testing.T) {
+	tempDir := t.TempDir()
+	AutoKeyBuffer = 15
+	db := prepareTest(tempDir)
+
+	for i := 0; i < 10; i++ {
+		insert := Insert(db, NewSimpleType("", "", i))
+		if insert.ID != strconv.Itoa(i) {
+			t.Error("Not expected id after INSERT.")
+		}
+	}
+	for i := 0; i < 5; i++ {
+		err := Delete[SimpleType](db, strconv.Itoa(i))
+		if err != nil {
+			t.Error("DELETE at key", i)
+		}
+	}
+	orderedNextIds := []string{"10", "11", "12", "13", "14", "0", "1", "2", "3", "4", "15", "16", "17", "18", "19"}
+	for i := 0; i < 15; i++ {
+		insert := Insert(db, NewAnotherType("", float32(i)))
+		if insert.ID != orderedNextIds[i] {
+			t.Error("Not expected id after INSERT.")
+		}
+	}
+	for i := 5; i < 10; i++ { // 10, 12, 14, 16, 18
+		err := Delete[AnotherType](db, strconv.Itoa(i*2))
+		if err != nil {
+			t.Error("DELETE at key", i)
+		}
+	}
+
+	db.Close()
+	AutoKeyBuffer = 15
+	db = prepareTest(tempDir)
+
+	nextIds := []string{"10", "12", "14", "16", "18", "20", "21", "22", "23", "24", "25",
+		"26", "27", "28", "29"}
+	for i := 0; i < 15; i++ {
+		insert := Insert(db, NewAnotherType("", float32(i)))
+		indexOf := IndexOf(insert.ID, nextIds)
+		if indexOf == -1 {
+			t.Error("Not expected id after INSERT.")
+		} else {
+			nextIds = append(nextIds[:indexOf], nextIds[indexOf+1:]...)
+		}
 	}
 }
 

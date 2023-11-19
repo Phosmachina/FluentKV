@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	AutoKeyBuffer = 100
+	AutoKeyBuffer = 1000
 
 	// PreAutoKavlb prefix for available key.
 	PreAutoKavlb = "tank%avlb_"
@@ -48,11 +48,13 @@ Interface is designed so that all raw operator must be implemented ; other can b
 implement in the abstraction AbstractRelDB. Raw Operators probably work directly with the db driver and are used by all other operators.
 */
 type IRelationalDB interface {
-	// GetNextKey pick a key in tank of key. If tank is empty, it should be filled with unused key.
-	GetNextKey() string
+	// GetKey pick a key in tank of key.
+	//If tank is empty, it will be filled with new keys.
+	GetKey() string
 	// FreeKey check if key is used (return error otherwise) and make key available again.
-	FreeKey(key ...string) []error
-	CleanUnusedKey()
+	FreeKey(key ...string)
+	// Close set the db to the closed state and finally close the db.
+	Close()
 
 	// RawSet set a value in DB. prefix and key are simply concatenated. Don't care about Key is already in used or not.
 	RawSet(prefix string, key string, value []byte)
@@ -75,7 +77,7 @@ type IRelationalDB interface {
 	// Set write a value for a specific id. TableName is inferred with the IObject. If Key not exist, an error is returned.
 	Set(id string, object IObject) error
 	SetWrp(objWrp ObjWrapper[IObject]) error
-	// Get retrieve the value for corresponding TableName and ID. Return nil if nothing found.
+	// Get retrieve the value for the corresponding TableName and ID. Return nil if nothing found.
 	Get(tableName string, id string) *IObject
 	// Update retrieve the value for corresponding TableName and ID, call the editor et Set the resulted value.
 	Update(tableName string, id string, editor func(value IObject) IObject) *IObject
@@ -185,6 +187,15 @@ func ToString(v any) string {
 	}
 
 	return result
+}
+
+func IndexOf[T comparable](element T, data []T) int {
+	for k, v := range data {
+		if element == v {
+			return k
+		}
+	}
+	return -1 // not found.
 }
 
 // endregion

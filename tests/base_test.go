@@ -49,7 +49,6 @@ func prepareTest(dir string) IRelationalDB {
 	gob.Register(AnotherType{})
 
 	// Initialize db
-	AutoKeyBuffer = 10000
 	db, _ := NewBadgerDB(dir)
 
 	return db

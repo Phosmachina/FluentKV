@@ -3,6 +3,7 @@ package driver
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"github.com/dgraph-io/badger"
 	"os"
@@ -38,15 +39,19 @@ func NewBadgerDB(directoryPath string) (IRelationalDB, error) {
 
 	service, err := badger.Open(opts)
 	if err != nil {
-		// golog.Errorf("unable to initialize the badger-based session database: %v", err)
+		fmt.Printf("unable to initialize the badger-based session database: %v", err)
 		return nil, err
 	}
 
 	db := &BadgerDB{Service: service}
-	db.IRelationalDB = db
+	db.AbstractRelDB = *NewAbstractRelDB(db)
 	runtime.SetFinalizer(db, closeDB)
 
 	return db, nil
+}
+
+func (db *BadgerDB) Close() {
+	_ = closeDB(db)
 }
 
 func closeDB(db *BadgerDB) error {
