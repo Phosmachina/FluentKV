@@ -1,14 +1,13 @@
 package fluentkv
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 )
 
 // AbstractRelDB pre-implement IRelationalDB,
-// you need to set value of interface: methods implemented are used in abstract.
+// you need to set the value of interface: methods implemented are used in abstract.
 type AbstractRelDB struct {
 	IRelationalDB
 	availableKeys []string
@@ -16,6 +15,8 @@ type AbstractRelDB struct {
 	m             sync.Mutex
 }
 
+// NewAbstractRelDB initialize internal IRelationalDB and read db to determine current
+// available and used keys.
 func NewAbstractRelDB(db IRelationalDB) *AbstractRelDB {
 	relDB := AbstractRelDB{}
 	relDB.IRelationalDB = db
@@ -189,16 +190,28 @@ func (db *AbstractRelDB) Count(prefix string) int {
 }
 
 func (db *AbstractRelDB) Foreach(tableName string, do func(id string, value *IObject)) {
+
+	pool := NewTaskPool()
+
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		do(key, Decode(value))
+		valCp := value
+		keyCp := key
+		pool.AddTask(
+			func() {
+				decode := Decode(valCp)
+				do(keyCp, decode)
+			})
 		return false
 	})
+
+	pool.Close()
 }
 
 func (db *AbstractRelDB) FindFirst(tableName string, predicate func(id string, value *IObject) bool) (string, *IObject) {
 
 	var resultId = ""
 	var resultValue *IObject
+	// TODO parallelized inner operation
 
 	db.RawIterKV(MakePrefix(tableName), func(curId string, value []byte) (stop bool) {
 		tmpObj := Decode(value)
@@ -218,14 +231,22 @@ func (db *AbstractRelDB) FindAll(tableName string, predicate func(id string, val
 	var resultIds []string
 	var resultValues []*IObject
 
+	pool := NewTaskPool()
+
 	db.RawIterKV(MakePrefix(tableName), func(key string, value []byte) (stop bool) {
-		curObj := Decode(value)
-		if predicate(key, curObj) {
-			resultIds = append(resultIds, key)
-			resultValues = append(resultValues, curObj)
-		}
+		valCp := value
+		keyCp := key
+		pool.AddTask(func() {
+			curObj := Decode(valCp)
+			if predicate(keyCp, curObj) {
+				resultIds = append(resultIds, keyCp)
+				resultValues = append(resultValues, curObj)
+			}
+		})
 		return false
 	})
+
+	pool.Close()
 
 	return resultIds, resultValues
 }
@@ -328,8 +349,8 @@ func Count[T IObject](db IRelationalDB) int {
 	return db.Count(MakePrefix(TableName[T]()))
 }
 
-// Foreach iterate on the table based on the tableName induced by the T parameter and execute the
-// do function on each value.
+// Foreach iterating on the table based on the tableName induced by the T parameter
+// and execute the do function on each value.
 func Foreach[T IObject](db IRelationalDB, do func(id string, value *T)) {
 	db.Foreach(TableName[T](), func(id string, value *IObject) {
 		t := (*value).(T)

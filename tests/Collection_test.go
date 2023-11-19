@@ -152,7 +152,7 @@ func Benchmark_NewCollection(b *testing.B) {
 
 	db := prepareTest(b.TempDir())
 	for i := 0; i < b.N; i++ {
-		Insert(db, NewSimpleType("val for t1", "val for t2", 986))
+		Insert(db, NewSimpleType("val for t1", "val for t2", i))
 	}
 
 	fmt.Println("New test with:", b.N, "it")

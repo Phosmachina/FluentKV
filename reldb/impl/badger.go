@@ -83,7 +83,7 @@ func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
 	})
 
 	if err != nil {
-		// golog.Error(err)
+		// TODO golog.Error(err)
 	}
 }
 
@@ -102,7 +102,7 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 		})
 	})
 
-	if err == badger.ErrKeyNotFound {
+	if errors.Is(err, badger.ErrKeyNotFound) {
 		return nil, false
 	}
 
@@ -152,14 +152,11 @@ func (db *BadgerDB) RawIterKV(prefix string, action func(key string, value []byt
 	defer iter.Close()
 
 	pfx := []byte(prefix)
+	var value []byte
 	for iter.Seek(pfx); iter.ValidForPrefix(pfx); iter.Next() {
-		var value []byte
-		_ = iter.Item().Value(func(valueBytes []byte) error {
-			value = valueBytes
-			return nil
-		})
+		valueCopy, _ := iter.Item().ValueCopy(value)
 
-		if action(string(bytes.TrimPrefix(iter.Item().Key(), pfx)), value) {
+		if action(string(bytes.TrimPrefix(iter.Item().Key(), pfx)), valueCopy) {
 			return
 		}
 	}

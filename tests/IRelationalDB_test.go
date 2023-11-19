@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"strconv"
 	"testing"
@@ -478,7 +477,7 @@ func Benchmark_Foreach(b *testing.B) {
 
 	db := prepareTest(b.TempDir())
 	for i := 0; i < b.N; i++ {
-		Insert(db, NewSimpleType("val for t1", "val for t2", 0))
+		Insert(db, NewSimpleType("val for t1", "val for t2", 1))
 	}
 
 	b.ResetTimer()
