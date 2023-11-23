@@ -12,6 +12,7 @@ type AbstractRelDB struct {
 	IRelationalDB
 	availableKeys []string
 	usedKeys      []string
+	triggers      []ITrigger
 	m             sync.Mutex
 }
 
@@ -40,6 +41,8 @@ func NewAbstractRelDB(db IRelationalDB) *AbstractRelDB {
 
 	return &relDB
 }
+
+func (db *AbstractRelDB) getAbstractRelDB() *AbstractRelDB { return db }
 
 func (db *AbstractRelDB) GetKey() string {
 
@@ -97,7 +100,9 @@ func (db *AbstractRelDB) FreeKey(keys ...string) {
 func (db *AbstractRelDB) Insert(object IObject) string {
 
 	id := db.GetKey()
+	db.runTriggers(true, InsertOperation, id, object)
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+	db.runTriggers(false, InsertOperation, id, object)
 
 	return id
 }
@@ -105,9 +110,11 @@ func (db *AbstractRelDB) Insert(object IObject) string {
 func (db *AbstractRelDB) Set(id string, object IObject) error {
 
 	if !db.Exist(object.TableName(), id) {
-		return InvalidId
+		return ErrInvalidId
 	}
+	db.runTriggers(true, UpdateOperation, id, object)
 	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+	db.runTriggers(false, UpdateOperation, id, object)
 
 	return nil
 }
@@ -128,19 +135,23 @@ func (db *AbstractRelDB) Get(tableName string, id string) *IObject {
 func (db *AbstractRelDB) Update(tableName string, id string, editor func(value IObject) IObject) *IObject {
 
 	value := db.Get(tableName, id)
+	db.runTriggers(true, UpdateOperation, id, value)
 	if value == nil {
 		return nil
 	}
 	edited := editor(*value)
 	_ = db.Set(id, edited)
+	db.runTriggers(false, UpdateOperation, id, edited)
 
 	return &edited
 }
 
 func (db *AbstractRelDB) Delete(tableName string, id string) error {
 
+	// TODO add call to run trigger
+	db.runTriggers(true, DeleteOperation, id, nil)
 	if !db.RawDelete(MakePrefix(tableName), id) {
-		return InvalidId
+		return ErrInvalidId
 	}
 	db.FreeKey(id)
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
@@ -152,6 +163,8 @@ func (db *AbstractRelDB) Delete(tableName string, id string) error {
 		}
 		return false
 	})
+	// TODO add call to run trigger
+	db.runTriggers(false, DeleteOperation, id, nil)
 
 	return nil
 }
@@ -159,7 +172,7 @@ func (db *AbstractRelDB) Delete(tableName string, id string) error {
 func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
 
 	if !db.RawDelete(MakePrefix(tableName), id) {
-		return InvalidId
+		return ErrInvalidId
 	}
 	db.FreeKey(id)
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
@@ -392,6 +405,166 @@ func FindAll[T IObject](db IRelationalDB, predicate func(id string, value *T) bo
 	}
 
 	return objs
+}
+
+// endregion
+
+// region Trigger
+
+// Operation represents CRUD operations in bitmask format.
+type Operation int
+
+// Contain checks if the Operation in parameter is present in this Operation.
+func (o Operation) Contain(s Operation) bool {
+	return o&s == s
+}
+
+// CRUD Operation used for trigger as filter.
+const (
+	GetOperation Operation = 1 << iota
+	InsertOperation
+	DeleteOperation
+	UpdateOperation
+)
+
+type ITrigger interface {
+	GetId() string
+	GetTableName() string
+	GetOperation() Operation
+	IsBefore() bool
+	Start(string, IObject)
+	Equals(other ITrigger) bool
+}
+
+type trigger[T IObject] struct {
+	id         string
+	tableName  string
+	operations Operation
+	isBefore   bool
+	action     func(id string, value T)
+}
+
+func (t trigger[T]) GetId() string {
+	return t.id
+}
+
+func (t trigger[T]) GetTableName() string {
+	return t.tableName
+}
+func (t trigger[T]) GetOperation() Operation {
+	return t.operations
+}
+
+func (t trigger[T]) IsBefore() bool {
+	return t.isBefore
+}
+
+func (t trigger[T]) Start(id string, value IObject) {
+	t.action(id, value.(T))
+}
+
+func (t trigger[T]) Equals(other ITrigger) bool {
+	return t.GetTableName() == other.GetTableName() && t.GetId() == other.GetId()
+}
+
+func (db *AbstractRelDB) runTriggers(
+	isBefore bool,
+	operation Operation,
+	id string,
+	value IObject,
+) {
+	pool := NewTaskPool()
+
+	for _, triggerToBeRan := range db.triggers {
+
+		if triggerToBeRan.IsBefore() == isBefore &&
+			triggerToBeRan.GetTableName() == value.TableName() &&
+			triggerToBeRan.GetOperation().Contain(operation) {
+
+			idCp := id
+			valCp := value
+			pool.AddTask(func() {
+				triggerToBeRan.Start(idCp, valCp)
+			})
+		}
+	}
+
+	pool.Close()
+}
+
+// AddTrigger register a new trigger with given parameter and table name inferred form
+// the T parameter.
+//
+// Parameters:
+//
+// id: a string that will be used as the identifier of the new trigger: it could be a
+// description but should be unique relatively to the table name.
+//
+// operations: a value of type Operation defining the operations that will trigger the
+// action.
+//
+// isBefore: a boolean indicating if the trigger should be processed before
+// (true) or after (false) the operation.
+//
+// action: a function that will be executed when the trigger fires with the id and
+// value of the current operation.
+//
+// Returns ErrDuplicateTrigger if a trigger with the same id already exists in the
+// provided database.
+func AddTrigger[T IObject](
+	idb IRelationalDB,
+	id string,
+	operations Operation,
+	isBefore bool,
+	action func(id string, value T),
+) error {
+
+	db := idb.getAbstractRelDB()
+
+	triggerToBeAdded := trigger[T]{
+		id:         id,
+		tableName:  TableName[T](),
+		operations: operations,
+		isBefore:   isBefore,
+		action:     action,
+	}
+
+	db.m.Lock()
+	index := IndexOf[ITrigger](triggerToBeAdded, db.triggers)
+	if index != -1 {
+		return ErrDuplicateTrigger
+	}
+
+	db.triggers = append(db.triggers, triggerToBeAdded)
+	db.m.Unlock()
+
+	return nil
+}
+
+// DeleteTrigger deletes a trigger from registered triggers based on the table name
+// inferred by the T parameter and the id.
+//
+// If the trigger is not present, it returns ErrInexistantTrigger.
+func DeleteTrigger[T IObject](idb IRelationalDB, id string,
+) error {
+
+	db := idb.getAbstractRelDB()
+
+	triggerToBeAdded := trigger[T]{
+		id:        id,
+		tableName: TableName[T](),
+	}
+
+	db.m.Lock()
+	index := IndexOf[ITrigger](triggerToBeAdded, db.triggers)
+	if index == -1 {
+		return ErrInexistantTrigger
+	}
+
+	db.triggers = append(db.triggers[index:], db.triggers[:index+1]...)
+	db.m.Unlock()
+
+	return nil
 }
 
 // endregion

@@ -25,7 +25,9 @@ var (
 	Delimiter     = "_"
 	LinkDelimiter = "@"
 
-	InvalidId = errors.New("InvalidId")
+	ErrInvalidId         = errors.New("the id specified is nod used in the db")
+	ErrDuplicateTrigger  = errors.New("the trigger with same id for this table name is already added")
+	ErrInexistantTrigger = errors.New("the trigger does not exist")
 )
 
 /*
@@ -109,6 +111,10 @@ type IRelationalDB interface {
 	// FindAll iterate on values of tableName and apply the predicate: all values matched are
 	// returned.
 	FindAll(tableName string, predicate func(id string, value *IObject) bool) ([]string, []*IObject)
+
+	// getAbstractRelDB allow retrieving the underlying AbstractRelDB for inner
+	// operations.
+	getAbstractRelDB() *AbstractRelDB
 }
 
 // region Helpers
