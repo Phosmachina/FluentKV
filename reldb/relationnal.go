@@ -80,24 +80,24 @@ type IRelationalDB interface {
 	RawIterKV(prefix string, action func(key string, value []byte) (stop bool))
 
 	// Insert creates a new entry in storage with IObject passed. TableName is inferred with the IObject.
-	Insert(object IObject) string
+	Insert(object IObject) (string, []error)
 	// Set write a value for a specific id.
 	// TableName is inferred with the IObject.
 	// If the Key does not exist, an error is returned.
-	Set(id string, object IObject) error
-	SetWrp(objWrp ObjWrapper[IObject]) error
+	Set(id string, object IObject) []error
+	SetWrp(objWrp ObjWrapper[IObject]) []error
 	// Get retrieve the value for the corresponding TableName and ID.
 	// Return nil if nothing is found.
-	Get(tableName string, id string) *IObject
+	Get(tableName string, id string) (*IObject, []error)
 	// Update retrieves the value for corresponding TableName and ID,
 	// call the editor et Set the resulted value.
-	Update(tableName string, id string, editor func(value IObject) IObject) *IObject
+	Update(tableName string, id string, editor func(value IObject) IObject) (*IObject, []error)
 	// Delete remove the value for corresponding TableName and ID. If Key not exist,
 	// an error is returned. The link using the object will be also deleted.
-	Delete(tableName string, id string) error
+	Delete(tableName string, id string) []error
 	// DeepDelete remove the value for corresponding TableName and ID. If Key not exist,
 	// an error is returned. It also recursively remove all values connected with a link.
-	DeepDelete(tableName string, id string) error
+	DeepDelete(tableName string, id string) []error
 	// Exist return true if the for corresponding TableName and ID exist in DB.
 	Exist(tableName string, id string) bool
 

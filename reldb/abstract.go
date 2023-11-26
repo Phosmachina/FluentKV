@@ -97,98 +97,141 @@ func (db *AbstractRelDB) FreeKey(keys ...string) {
 	db.m.Unlock()
 }
 
-func (db *AbstractRelDB) Insert(object IObject) string {
+func (db *AbstractRelDB) Insert(object IObject) (string, []error) {
 
 	id := db.GetKey()
-	db.runTriggers(true, InsertOperation, id, object)
-	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
-	db.runTriggers(false, InsertOperation, id, object)
 
-	return id
+	errors := db.withTriggerWrapper(id, &object, InsertOperation, func() error {
+		db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+		return nil
+	})
+
+	return id, errors
 }
 
-func (db *AbstractRelDB) Set(id string, object IObject) error {
+func (db *AbstractRelDB) Set(id string, object IObject) []error {
 
 	if !db.Exist(object.TableName(), id) {
-		return ErrInvalidId
+		return []error{ErrInvalidId}
 	}
-	db.runTriggers(true, UpdateOperation, id, object)
-	db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
-	db.runTriggers(false, UpdateOperation, id, object)
 
-	return nil
+	errors := db.withTriggerWrapper(id, &object, UpdateOperation, func() error {
+		db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+		return nil
+	})
+
+	return errors
 }
 
-func (db *AbstractRelDB) SetWrp(objWrp ObjWrapper[IObject]) error {
+func (db *AbstractRelDB) SetWrp(objWrp ObjWrapper[IObject]) []error {
 	return db.Set(objWrp.ID, objWrp.Value)
 }
 
-func (db *AbstractRelDB) Get(tableName string, id string) *IObject {
-	value, found := db.RawGet(MakePrefix(tableName), id)
-	if found {
-		return Decode(value)
-	} else {
+func (db *AbstractRelDB) Get(tableName string, id string) (*IObject, []error) {
+
+	var value *IObject
+
+	errors := db.withTriggerWrapper(id, nil, GetOperation, func() error {
+		raw, found := db.RawGet(MakePrefix(tableName), id)
+		if found {
+			value = Decode(raw)
+		} else {
+			value = nil
+		}
 		return nil
-	}
+	})
+
+	return value, errors
 }
 
-func (db *AbstractRelDB) Update(tableName string, id string, editor func(value IObject) IObject) *IObject {
+func (db *AbstractRelDB) Update(
+	tableName string,
+	id string,
+	editor func(value IObject) IObject,
+) (*IObject, []error) {
 
-	value := db.Get(tableName, id)
-	db.runTriggers(true, UpdateOperation, id, value)
-	if value == nil {
-		return nil
+	value, errors := db.Get(tableName, id)
+	if errors != nil {
+		return nil, errors
 	}
+
+	errors = db.withTriggerWrapper(id, value, UpdateOperation, func() error {
+		raw, found := db.RawGet(MakePrefix(tableName), id)
+		if found {
+			value = Decode(raw)
+		} else {
+			value = nil
+		}
+		return nil
+	})
+
+	if value == nil {
+		return nil, errors
+	}
+
 	edited := editor(*value)
 	_ = db.Set(id, edited)
-	db.runTriggers(false, UpdateOperation, id, edited)
 
-	return &edited
+	return &edited, nil
 }
 
-func (db *AbstractRelDB) Delete(tableName string, id string) error {
+func (db *AbstractRelDB) Delete(tableName string, id string) []error {
 
-	// TODO add call to run trigger
-	db.runTriggers(true, DeleteOperation, id, nil)
-	if !db.RawDelete(MakePrefix(tableName), id) {
-		return ErrInvalidId
+	// Use raw operation to bypass triggers on Get operation.
+	raw, found := db.RawGet(MakePrefix(tableName), id)
+	if !found {
+		return []error{ErrInvalidId}
 	}
-	db.FreeKey(id)
-	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
-		for _, s := range strings.Split(key, LinkDelimiter) {
-			tnAndId := strings.Split(s, Delimiter)
-			if tnAndId[0] == tableName && tnAndId[1] == id {
+	value := Decode(raw)
+
+	return db.withTriggerWrapper(id, value, DeleteOperation, func() error {
+		if !db.RawDelete(MakePrefix(tableName), id) {
+			return ErrInvalidId
+		}
+		db.FreeKey(id)
+		db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+			for _, s := range strings.Split(key, LinkDelimiter) {
+				tnAndId := strings.Split(s, Delimiter)
+				if tnAndId[0] == tableName && tnAndId[1] == id {
+					db.RawDelete(PrefixLink, key)
+				}
+			}
+			return false
+		})
+
+		return nil
+	})
+}
+
+func (db *AbstractRelDB) DeepDelete(tableName string, id string) []error {
+
+	// Use raw operation to bypass triggers on Get operation.
+	raw, found := db.RawGet(MakePrefix(tableName), id)
+	if !found {
+		return []error{ErrInvalidId}
+	}
+	value := Decode(raw)
+
+	return db.withTriggerWrapper(id, value, DeleteOperation, func() error {
+		if !db.RawDelete(MakePrefix(tableName), id) {
+			return ErrInvalidId
+		}
+		db.FreeKey(id)
+		db.RawIterKey(PrefixLink, func(key string) (stop bool) {
+			split := strings.Split(key, LinkDelimiter)
+			tnAndIdK1 := strings.Split(split[0], Delimiter)
+			tnAndIdK2 := strings.Split(split[1], Delimiter)
+			if tnAndIdK1[0] == tableName && tnAndIdK1[1] == id {
+				db.RawDelete(PrefixLink, key)
+				_ = db.DeepDelete(tnAndIdK2[0], tnAndIdK2[1])
+			} else if tnAndIdK2[0] == tableName && tnAndIdK2[1] == id {
 				db.RawDelete(PrefixLink, key)
 			}
-		}
-		return false
-	})
-	// TODO add call to run trigger
-	db.runTriggers(false, DeleteOperation, id, nil)
-
-	return nil
-}
-
-func (db *AbstractRelDB) DeepDelete(tableName string, id string) error {
-
-	if !db.RawDelete(MakePrefix(tableName), id) {
-		return ErrInvalidId
-	}
-	db.FreeKey(id)
-	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
-		split := strings.Split(key, LinkDelimiter)
-		tnAndIdK1 := strings.Split(split[0], Delimiter)
-		tnAndIdK2 := strings.Split(split[1], Delimiter)
-		if tnAndIdK1[0] == tableName && tnAndIdK1[1] == id {
-			db.RawDelete(PrefixLink, key)
-			_ = db.DeepDelete(tnAndIdK2[0], tnAndIdK2[1])
-		} else if tnAndIdK2[0] == tableName && tnAndIdK2[1] == id {
-			db.RawDelete(PrefixLink, key)
-		}
-		return false
+			return false
+		})
+		return nil
 	})
 
-	return nil
 }
 
 func (db *AbstractRelDB) Count(prefix string) int {
@@ -273,42 +316,46 @@ func TableName[T IObject]() string {
 }
 
 // Insert in the db the value and return the resulting wrapper.
-func Insert[T IObject](db IRelationalDB, value T) *ObjWrapper[T] {
-	id := db.Insert(value)
-	return NewObjWrapper(db, id, &value)
+func Insert[T IObject](db IRelationalDB, value T) (*ObjWrapper[T], []error) {
+	id, errors := db.Insert(value)
+	return NewObjWrapper(db, id, &value), errors
 }
 
 // Set override the value at the id specified with the passed value. The id shall exist.
-func Set[T IObject](db IRelationalDB, id string, value T) *ObjWrapper[T] {
+func Set[T IObject](db IRelationalDB, id string, value T) (*ObjWrapper[T], []error) {
 
-	if err := db.Set(id, value); err != nil {
-		return nil
+	if errors := db.Set(id, value); errors != nil {
+		return nil, errors
 	}
 
-	return NewObjWrapper(db, id, &value)
+	return NewObjWrapper(db, id, &value), nil
 }
 
 // SetWrp same as set but take a wrapped object in argument.
-func SetWrp[T IObject](db IRelationalDB, objWrp ObjWrapper[T]) *ObjWrapper[T] {
+func SetWrp[T IObject](db IRelationalDB, objWrp ObjWrapper[T]) (*ObjWrapper[T], []error) {
 	return Set(db, objWrp.ID, objWrp.Value)
 }
 
 // Get the value in db based on id and the tableName induced by the T parameter.
-func Get[T IObject](db IRelationalDB, id string) *ObjWrapper[T] {
+func Get[T IObject](db IRelationalDB, id string) (*ObjWrapper[T], []error) {
 
-	get := db.Get(TableName[T](), id)
+	get, errors := db.Get(TableName[T](), id)
 
 	if get == nil {
-		return nil
+		return nil, errors
 	}
 	t := (*get).(T)
 
-	return NewObjWrapper(db, id, &t)
+	return NewObjWrapper(db, id, &t), nil
 }
 
 // Update the value determine with the id and the tableName induced by the T parameter.
 // The result of the editor function is set in the db.
-func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjWrapper[T] {
+func Update[T IObject](
+	db IRelationalDB,
+	id string,
+	editor func(value *T),
+) (*ObjWrapper[T], []error) {
 
 	var t T
 
@@ -318,30 +365,30 @@ func Update[T IObject](db IRelationalDB, id string, editor func(value *T)) *ObjW
 		return t
 	})
 
-	return NewObjWrapper(db, id, &t)
+	return NewObjWrapper(db, id, &t), nil
 }
 
 // Delete the object determine with the id and the tableName induced by the T parameter.
 // id is released and related link are deleted.
-func Delete[T IObject](db IRelationalDB, id string) error {
+func Delete[T IObject](db IRelationalDB, id string) []error {
 	return db.Delete(TableName[T](), id)
 }
 
 // DeleteWrp the object determine with the id and the tableName induced by the T parameter.
 // id is released and related link are deleted.
-func DeleteWrp[T IObject](objWrp *ObjWrapper[T]) error {
+func DeleteWrp[T IObject](objWrp *ObjWrapper[T]) []error {
 	return Delete[T](objWrp.db, objWrp.ID)
 }
 
 // DeepDelete the object determine with the id and the tableName induced by the T parameter and
 // all object directly connected.
-func DeepDelete[T IObject](db IRelationalDB, id string) error {
+func DeepDelete[T IObject](db IRelationalDB, id string) []error {
 	return db.DeepDelete(TableName[T](), id)
 }
 
 // DeepDeleteWrp the object determine with the id and the tableName induced by the T parameter and
 // all object directly connected.
-func DeepDeleteWrp[T IObject](objWrp *ObjWrapper[T]) error {
+func DeepDeleteWrp[T IObject](objWrp *ObjWrapper[T]) []error {
 	return DeepDelete[T](objWrp.db, objWrp.ID)
 }
 
@@ -432,7 +479,8 @@ type ITrigger interface {
 	GetTableName() string
 	GetOperation() Operation
 	IsBefore() bool
-	Start(string, IObject)
+	StartBefore(string, *IObject) error
+	StartAfter(string, *IObject)
 	Equals(other ITrigger) bool
 }
 
@@ -441,7 +489,8 @@ type trigger[T IObject] struct {
 	tableName  string
 	operations Operation
 	isBefore   bool
-	action     func(id string, value T)
+	beforeTask func(id string, value *T) error
+	afterTask  func(id string, value *T)
 }
 
 func (t trigger[T]) GetId() string {
@@ -459,32 +508,62 @@ func (t trigger[T]) IsBefore() bool {
 	return t.isBefore
 }
 
-func (t trigger[T]) Start(id string, value IObject) {
-	t.action(id, value.(T))
+func (t trigger[T]) StartBefore(id string, value *IObject) error {
+	v := (*value).(T)
+	return t.beforeTask(id, &v)
+}
+
+func (t trigger[T]) StartAfter(id string, value *IObject) {
+	v := (*value).(T)
+	t.afterTask(id, &v)
 }
 
 func (t trigger[T]) Equals(other ITrigger) bool {
 	return t.GetTableName() == other.GetTableName() && t.GetId() == other.GetId()
 }
 
-func (db *AbstractRelDB) runTriggers(
-	isBefore bool,
+func (db *AbstractRelDB) runBeforeTriggers(
+	operation Operation,
+	id string,
+	value IObject,
+) []error {
+
+	var errs []error
+	pool := NewTaskPool()
+
+	for _, t := range db.triggers {
+
+		if t.IsBefore() == true &&
+			t.GetTableName() == value.TableName() &&
+			t.GetOperation().Contain(operation) {
+
+			tCp := t
+			pool.AddTask(func() {
+				errs = append(errs, tCp.StartBefore(id, &value))
+			})
+		}
+	}
+
+	pool.Close()
+	return errs
+}
+
+func (db *AbstractRelDB) runAfterTriggers(
 	operation Operation,
 	id string,
 	value IObject,
 ) {
 	pool := NewTaskPool()
 
-	for _, triggerToBeRan := range db.triggers {
+	for _, t := range db.triggers {
 
-		if triggerToBeRan.IsBefore() == isBefore &&
-			triggerToBeRan.GetTableName() == value.TableName() &&
-			triggerToBeRan.GetOperation().Contain(operation) {
+		if t.IsBefore() == false &&
+			t.GetTableName() == value.TableName() &&
+			t.GetOperation().Contain(operation) {
 
-			idCp := id
-			valCp := value
+			tCp := t
 			pool.AddTask(func() {
-				triggerToBeRan.Start(idCp, valCp)
+				tCp.StartAfter(id, &value)
 			})
 		}
 	}
@@ -492,8 +571,28 @@ func (db *AbstractRelDB) runTriggers(
 	pool.Close()
 }
 
-// AddTrigger register a new trigger with given parameter and table name inferred form
+func (db *AbstractRelDB) withTriggerWrapper(
+	id string,
+	value *IObject,
+	operation Operation,
+	action func() error,
+) []error {
+
+	errs := db.runBeforeTriggers(operation, id, *value)
+	if errs != nil {
+		return errs
+	}
+
+	err := action()
+
+	db.runAfterTriggers(operation, id, *value)
+
+	return []error{err}
+}
+
+// AddBeforeTrigger register a new trigger with given parameter and table name inferred form
 // the T parameter.
+// The action ran before the targeted operation.
 //
 // Parameters:
 //
@@ -503,20 +602,18 @@ func (db *AbstractRelDB) runTriggers(
 // operations: a value of type Operation defining the operations that will trigger the
 // action.
 //
-// isBefore: a boolean indicating if the trigger should be processed before
-// (true) or after (false) the operation.
-//
 // action: a function that will be executed when the trigger fires with the id and
 // value of the current operation.
+// The return value, an error,
+// is used as a condition for performing the targeted operation.
 //
 // Returns ErrDuplicateTrigger if a trigger with the same id already exists in the
 // provided database.
-func AddTrigger[T IObject](
+func AddBeforeTrigger[T IObject](
 	idb IRelationalDB,
 	id string,
 	operations Operation,
-	isBefore bool,
-	action func(id string, value T),
+	action func(id string, value *T) error,
 ) error {
 
 	db := idb.getAbstractRelDB()
@@ -525,12 +622,58 @@ func AddTrigger[T IObject](
 		id:         id,
 		tableName:  TableName[T](),
 		operations: operations,
-		isBefore:   isBefore,
-		action:     action,
+		isBefore:   true,
+		beforeTask: action,
 	}
 
 	db.m.Lock()
-	index := IndexOf[ITrigger](triggerToBeAdded, db.triggers)
+	index := indexOf(triggerToBeAdded, db.triggers)
+	if index != -1 {
+		return ErrDuplicateTrigger
+	}
+
+	db.triggers = append(db.triggers, triggerToBeAdded)
+	db.m.Unlock()
+
+	return nil
+}
+
+// AddAfterTrigger register a new trigger with given parameter and table name inferred form
+// the T parameter.
+// The action ran after the targeted operation.
+//
+// Parameters:
+//
+// id: a string that will be used as the identifier of the new trigger: it could be a
+// description but should be unique relatively to the table name.
+//
+// operations: a value of type Operation defining the operations that will trigger the
+// action.
+//
+// action: a function that will be executed when the trigger fires with the id and
+// value of the current operation.
+//
+// Returns ErrDuplicateTrigger if a trigger with the same id already exists in the
+// provided database.
+func AddAfterTrigger[T IObject](
+	idb IRelationalDB,
+	id string,
+	operations Operation,
+	action func(id string, value *T),
+) error {
+
+	db := idb.getAbstractRelDB()
+
+	triggerToBeAdded := trigger[T]{
+		id:         id,
+		tableName:  TableName[T](),
+		operations: operations,
+		isBefore:   false,
+		afterTask:  action,
+	}
+
+	db.m.Lock()
+	index := indexOf(triggerToBeAdded, db.triggers)
 	if index != -1 {
 		return ErrDuplicateTrigger
 	}
@@ -545,8 +688,7 @@ func AddTrigger[T IObject](
 // inferred by the T parameter and the id.
 //
 // If the trigger is not present, it returns ErrInexistantTrigger.
-func DeleteTrigger[T IObject](idb IRelationalDB, id string,
-) error {
+func DeleteTrigger[T IObject](idb IRelationalDB, id string) error {
 
 	db := idb.getAbstractRelDB()
 
@@ -556,15 +698,24 @@ func DeleteTrigger[T IObject](idb IRelationalDB, id string,
 	}
 
 	db.m.Lock()
-	index := IndexOf[ITrigger](triggerToBeAdded, db.triggers)
+	index := indexOf(triggerToBeAdded, db.triggers)
 	if index == -1 {
 		return ErrInexistantTrigger
 	}
 
-	db.triggers = append(db.triggers[index:], db.triggers[:index+1]...)
+	db.triggers = append(db.triggers[:index], db.triggers[index+1:]...)
 	db.m.Unlock()
 
 	return nil
+}
+
+func indexOf(t ITrigger, triggers []ITrigger) int {
+	for k, v := range triggers {
+		if t.Equals(v) {
+			return k
+		}
+	}
+	return -1 // not found.
 }
 
 // endregion
