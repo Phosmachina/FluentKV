@@ -115,12 +115,10 @@ func (db *AbstractRelDB) Set(id string, object IObject) []error {
 		return []error{ErrInvalidId}
 	}
 
-	errors := db.withTriggerWrapper(id, &object, UpdateOperation, func() error {
+	return db.withTriggerWrapper(id, &object, UpdateOperation, func() error {
 		db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
 		return nil
 	})
-
-	return errors
 }
 
 func (db *AbstractRelDB) SetWrp(objWrp ObjWrapper[IObject]) []error {
@@ -131,13 +129,14 @@ func (db *AbstractRelDB) Get(tableName string, id string) (*IObject, []error) {
 
 	var value *IObject
 
-	errors := db.withTriggerWrapper(id, nil, GetOperation, func() error {
-		raw, found := db.RawGet(MakePrefix(tableName), id)
-		if found {
-			value = Decode(raw)
-		} else {
-			value = nil
-		}
+	raw, found := db.RawGet(MakePrefix(tableName), id)
+	if found {
+		value = Decode(raw)
+	} else {
+		return nil, []error{ErrInvalidId}
+	}
+
+	errors := db.withTriggerWrapper(id, value, GetOperation, func() error {
 		return nil
 	})
 
@@ -150,29 +149,23 @@ func (db *AbstractRelDB) Update(
 	editor func(value IObject) IObject,
 ) (*IObject, []error) {
 
-	value, errors := db.Get(tableName, id)
-	if errors != nil {
-		return nil, errors
+	var value *IObject
+	var edited IObject
+
+	raw, found := db.RawGet(MakePrefix(tableName), id)
+	if found {
+		value = Decode(raw)
+	} else {
+		return nil, []error{ErrInvalidId}
 	}
 
-	errors = db.withTriggerWrapper(id, value, UpdateOperation, func() error {
-		raw, found := db.RawGet(MakePrefix(tableName), id)
-		if found {
-			value = Decode(raw)
-		} else {
-			value = nil
-		}
+	errors := db.withTriggerWrapper(id, value, UpdateOperation, func() error {
+		edited = editor(*value)
+		_ = db.Set(id, edited)
 		return nil
 	})
 
-	if value == nil {
-		return nil, errors
-	}
-
-	edited := editor(*value)
-	_ = db.Set(id, edited)
-
-	return &edited, nil
+	return &edited, errors
 }
 
 func (db *AbstractRelDB) Delete(tableName string, id string) []error {
@@ -231,7 +224,6 @@ func (db *AbstractRelDB) DeepDelete(tableName string, id string) []error {
 		})
 		return nil
 	})
-
 }
 
 func (db *AbstractRelDB) Count(prefix string) int {
@@ -346,7 +338,7 @@ func Get[T IObject](db IRelationalDB, id string) (*ObjWrapper[T], []error) {
 	}
 	t := (*get).(T)
 
-	return NewObjWrapper(db, id, &t), nil
+	return NewObjWrapper(db, id, &t), errors
 }
 
 // Update the value determine with the id and the tableName induced by the T parameter.
@@ -587,7 +579,10 @@ func (db *AbstractRelDB) withTriggerWrapper(
 
 	db.runAfterTriggers(operation, id, *value)
 
-	return []error{err}
+	if err != nil {
+		return []error{err}
+	}
+	return []error{}
 }
 
 // AddBeforeTrigger register a new trigger with given parameter and table name inferred form

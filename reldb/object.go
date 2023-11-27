@@ -83,7 +83,8 @@ func LinkNew[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, objs ..
 	var objsWrp []*ObjWrapper[T]
 
 	for _, obj := range objs {
-		id := s.db.Insert(obj)
+		object, _ := s.db.Insert(obj)
+		id := object
 		wrapper := NewObjWrapper(s.db, id, &obj)
 		Link[S, T](s, biDirectional, wrapper)
 		objsWrp = append(objsWrp, wrapper)
@@ -102,9 +103,10 @@ func AllFromLink[S IObject, T IObject](db IRelationalDB, idOfS string) []*ObjWra
 
 	db.RawIterKey(PrefixLink, func(key string) (stop bool) {
 		if strings.HasPrefix(key, SName+Delimiter+idOfS+LinkDelimiter+TName) {
-			value := (*db.Get(
+			object, _ := db.Get(
 				TName,
-				strings.Split(strings.Split(key, LinkDelimiter)[1], Delimiter)[1])).(T)
+				strings.Split(strings.Split(key, LinkDelimiter)[1], Delimiter)[1])
+			value := (*object).(T)
 			results = append(results, NewObjWrapper[T](db, key, &value))
 		}
 		return false
