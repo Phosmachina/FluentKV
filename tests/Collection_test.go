@@ -99,7 +99,7 @@ func Test_Where(t *testing.T) {
 	db := prepareTest(t.TempDir())
 
 	for i, obj := range objs {
-		objWrp := Insert(db, obj)
+		objWrp, _ := Insert(db, obj)
 		LinkNew(objWrp, true, objsTarget[i])
 	}
 

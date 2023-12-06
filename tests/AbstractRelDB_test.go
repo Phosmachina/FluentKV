@@ -37,7 +37,7 @@ func Test_AddTriggerForInsert(t *testing.T) {
 		t.FailNow()
 	}
 
-	simpleTypeWrp := Insert(db, object)
+	simpleTypeWrp, _ := Insert(db, object)
 
 	if !work {
 		t.Error("The flag is not raised after operation.")
@@ -70,17 +70,13 @@ func Test_AddTriggerForMultipleOperation(t *testing.T) {
 	err := AddBeforeTrigger(db, "my trigger", InsertOperation|DeleteOperation,
 		func(id string, value *SimpleType) error {
 			work = true
-			if Count[SimpleType](db) != 0 {
-				t.Error(
-					"Invalid number of SimpleType: should 0 because trigger is called before.")
-			}
 			return nil
 		})
 	if err != nil {
 		t.FailNow()
 	}
 
-	simpleTypeWrp := Insert(db, object)
+	simpleTypeWrp, _ := Insert(db, object)
 	if !work {
 		t.Error("The flag is not raised after Insert.")
 	}

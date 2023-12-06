@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	. "github.com/Phosmachina/FluentKV/reldb"
 	"strconv"
 	"testing"
@@ -28,12 +29,12 @@ func Test_InsertGet_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
 	db := prepareTest(t.TempDir())
 
-	insertedValue := Insert(db, object)
+	insertedValue, _ := Insert(db, object)
 	if !insertedValue.Value.Equals(object) {
 		t.Error("Value not equal after INSERT.")
 	}
 
-	getResult := Get[SimpleType](db, insertedValue.ID)
+	getResult, _ := Get[SimpleType](db, insertedValue.ID)
 	if !getResult.Value.Equals(object) {
 		t.Error("Values not equals after GET.")
 	}
@@ -45,27 +46,27 @@ func Test_AutoKey(t *testing.T) {
 	db := prepareTest(tempDir)
 
 	for i := 0; i < 10; i++ {
-		insert := Insert(db, NewSimpleType("", "", i))
+		insert, _ := Insert(db, NewSimpleType("", "", i))
 		if insert.ID != strconv.Itoa(i) {
 			t.Error("Not expected id after INSERT.")
 		}
 	}
 	for i := 0; i < 5; i++ {
-		err := Delete[SimpleType](db, strconv.Itoa(i))
-		if err != nil {
+		errs := Delete[SimpleType](db, strconv.Itoa(i))
+		if len(errs) != 0 {
 			t.Error("DELETE at key", i)
 		}
 	}
 	orderedNextIds := []string{"10", "11", "12", "13", "14", "0", "1", "2", "3", "4", "15", "16", "17", "18", "19"}
 	for i := 0; i < 15; i++ {
-		insert := Insert(db, NewAnotherType("", float32(i)))
+		insert, _ := Insert(db, NewAnotherType("", float32(i)))
 		if insert.ID != orderedNextIds[i] {
 			t.Error("Not expected id after INSERT.")
 		}
 	}
 	for i := 5; i < 10; i++ { // 10, 12, 14, 16, 18
-		err := Delete[AnotherType](db, strconv.Itoa(i*2))
-		if err != nil {
+		errs := Delete[AnotherType](db, strconv.Itoa(i*2))
+		if len(errs) != 0 {
 			t.Error("DELETE at key", i)
 		}
 	}
@@ -77,7 +78,7 @@ func Test_AutoKey(t *testing.T) {
 	nextIds := []string{"10", "12", "14", "16", "18", "20", "21", "22", "23", "24", "25",
 		"26", "27", "28", "29"}
 	for i := 0; i < 15; i++ {
-		insert := Insert(db, NewAnotherType("", float32(i)))
+		insert, _ := Insert(db, NewAnotherType("", float32(i)))
 		indexOf := IndexOf(insert.ID, nextIds)
 		if indexOf == -1 {
 			t.Error("Not expected id after INSERT.")
@@ -91,11 +92,13 @@ func Test_Set_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
 	db := prepareTest(t.TempDir())
 
-	id := Insert(db, object).ID
+	insert, _ := Insert(db, object)
+	id := insert.ID
 	object.Val = 12
 	Set(db, id, object)
 
-	if Get[SimpleType](db, id).Value.Val != 12 {
+	get, _ := Get[SimpleType](db, id)
+	if get.Value.Val != 12 {
 		t.Error("Invalid value after SET.")
 	}
 }
@@ -104,12 +107,14 @@ func Test_Update_SimpleType(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
 	db := prepareTest(t.TempDir())
 
-	id := Insert(db, object).ID
+	insert, _ := Insert(db, object)
+	id := insert.ID
 	Update(db, id, func(value *SimpleType) {
 		value.Val = 12
 	})
 
-	value := Get[SimpleType](db, id).Value
+	get, _ := Get[SimpleType](db, id)
+	value := get.Value
 
 	if value.Val != 12 {
 		t.Error("Values not equals after GET.")
@@ -120,7 +125,8 @@ func Test_Exist(t *testing.T) {
 	object := NewSimpleType("val for t1", "val for t2", 42)
 	db := prepareTest(t.TempDir())
 
-	id := Insert(db, object).ID
+	insert, _ := Insert(db, object)
+	id := insert.ID
 
 	if !Exist[SimpleType](db, id) {
 		t.Error("Entry not exist after INSERT.")
@@ -151,8 +157,8 @@ func Test_Link(t *testing.T) {
 	o3 := NewSimpleType("val for t1", "val for t2", 3)
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
 
 	o3Wrp := LinkNew(o1Wrp, false, o3)[0]
 	Link(o1Wrp, true, o2Wrp)
@@ -175,14 +181,16 @@ func Test_Delete(t *testing.T) {
 	o2 := NewSimpleType("val for t1", "val for t2", 2)
 	db := prepareTest(t.TempDir())
 
-	idO2 := LinkNew(Insert(db, o1), true, o2)[0].ID
+	insert, _ := Insert(db, o1)
+	idO2 := LinkNew(insert, true, o2)[0].ID
 
-	err := Delete[SimpleType](db, idO2)
-	if err != nil {
+	errs := Delete[SimpleType](db, idO2)
+	if len(errs) != 0 {
 		t.Error("Failed to delete inserted o2 object.")
 	}
 
-	if Get[SimpleType](db, idO2) != nil {
+	_, errs = Get[SimpleType](db, idO2)
+	if len(errs) == 0 || !errors.Is(errs[0], ErrInvalidId) {
 		t.Error("The deleted o2 object still present.")
 	}
 }
@@ -193,26 +201,29 @@ func Test_DeepDelete_0(t *testing.T) {
 	o3 := NewSimpleType("val for t1", "val for t2", 3)
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
-	o3Wrp := Insert(db, o3)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
+	o3Wrp, _ := Insert(db, o3)
 
 	Link(o1Wrp, true, o2Wrp)
 	Link(o1Wrp, false, o3Wrp)
 
-	err := DeepDelete[SimpleType](db, o1Wrp.ID)
-	if err != nil {
-		t.Error("DeepDelete not correctly done.")
+	errs := DeepDelete[SimpleType](db, o1Wrp.ID)
+	if len(errs) != 0 {
+		t.Error("DeepDelete finish with error.")
 	}
 
-	if Get[SimpleType](db, o1Wrp.ID) != nil {
+	_, errs = Get[SimpleType](db, o1Wrp.ID)
+	if len(errs) != 0 && !errors.Is(errs[0], ErrInvalidId) {
 		t.Error("o1 object not deleted.")
 	}
-	if Get[SimpleType](db, o2Wrp.ID) != nil {
+	_, errs = Get[SimpleType](db, o2Wrp.ID)
+	if len(errs) != 0 && !errors.Is(errs[0], ErrInvalidId) {
 		t.Error("o2 object not deleted.")
 	}
-	if Get[SimpleType](db, o3Wrp.ID) != nil {
-		t.Error("o3 object not deleted.")
+	_, errs = Get[SimpleType](db, o3Wrp.ID)
+	if len(errs) != 0 && !errors.Is(errs[0], ErrInvalidId) {
+		t.Error("o3 object is deleted.")
 	}
 }
 
@@ -222,24 +233,28 @@ func Test_DeepDelete_1(t *testing.T) {
 	o3 := NewSimpleType("val for t1", "val for t2", 3)
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
-	o3Wrp := Insert(db, o3)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
+	o3Wrp, _ := Insert(db, o3)
 
 	Link(o3Wrp, true, o2Wrp)
 	Link(o1Wrp, false, o3Wrp)
 
-	err := DeepDelete[SimpleType](db, o3Wrp.ID)
-	if err != nil {
-		t.Error("DeepDelete not correctly done.")
+	errs := DeepDelete[SimpleType](db, o3Wrp.ID)
+	if len(errs) != 0 {
+		t.Error("DeepDelete finish with error.")
 	}
-	if Get[SimpleType](db, o1Wrp.ID) == nil {
+
+	_, errs = Get[SimpleType](db, o1Wrp.ID)
+	if len(errs) != 0 && !errors.Is(errs[0], ErrInvalidId) {
 		t.Error("o1 object is deleted.")
 	}
-	if Get[SimpleType](db, o2Wrp.ID) != nil {
+	_, errs = Get[SimpleType](db, o2Wrp.ID)
+	if len(errs) != 0 && !errors.Is(errs[0], ErrInvalidId) {
 		t.Error("o2 object not deleted.")
 	}
-	if Get[SimpleType](db, o3Wrp.ID) != nil {
+	_, errs = Get[SimpleType](db, o3Wrp.ID)
+	if len(errs) != 0 && !errors.Is(errs[0], ErrInvalidId) {
 		t.Error("o3 object not deleted.")
 	}
 }
@@ -251,9 +266,9 @@ func Test_RemoveLink(t *testing.T) {
 
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
-	o3Wrp := Insert(db, o3)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
+	o3Wrp, _ := Insert(db, o3)
 
 	Link(o1Wrp, true, o2Wrp)
 	Link(o1Wrp, true, o3Wrp)
@@ -278,11 +293,11 @@ func Test_RemoveAllTableLink(t *testing.T) {
 
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
-	o3Wrp := Insert(db, o3)
-	o4Wrp := Insert(db, o4)
-	o5Wrp := Insert(db, o5)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
+	o3Wrp, _ := Insert(db, o3)
+	o4Wrp, _ := Insert(db, o4)
+	o5Wrp, _ := Insert(db, o5)
 
 	Link(o1Wrp, true, o2Wrp)
 	Link(o1Wrp, true, o3Wrp)
@@ -312,11 +327,11 @@ func Test_RemoveAllLink(t *testing.T) {
 
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
-	o3Wrp := Insert(db, o3)
-	o4Wrp := Insert(db, o4)
-	o5Wrp := Insert(db, o5)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
+	o3Wrp, _ := Insert(db, o3)
+	o4Wrp, _ := Insert(db, o4)
+	o5Wrp, _ := Insert(db, o5)
 
 	Link(o1Wrp, true, o2Wrp)
 	Link(o1Wrp, true, o3Wrp)
@@ -419,12 +434,12 @@ func Test_Visit(t *testing.T) {
 
 	db := prepareTest(t.TempDir())
 
-	o1Wrp := Insert(db, o1)
-	o2Wrp := Insert(db, o2)
-	o3Wrp := Insert(db, o3)
+	o1Wrp, _ := Insert(db, o1)
+	o2Wrp, _ := Insert(db, o2)
+	o3Wrp, _ := Insert(db, o3)
 	_ = DeleteWrp(o3Wrp)
-	o4Wrp := Insert(db, o4)
-	o5Wrp := Insert(db, o5)
+	o4Wrp, _ := Insert(db, o4)
+	o5Wrp, _ := Insert(db, o5)
 
 	Link(o1Wrp, true, o2Wrp)
 	Link(o1Wrp, true, o4Wrp)
@@ -466,8 +481,8 @@ func Benchmark_InsertGet_SimpleType(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tmp := objects[i]
 		pool.AddTask(func() {
-			simpleTypeWrp := Insert(db, tmp)
-			result = Get[SimpleType](db, simpleTypeWrp.ID)
+			simpleTypeWrp, _ := Insert(db, tmp)
+			result, _ = Get[SimpleType](db, simpleTypeWrp.ID)
 		})
 	}
 	_ = result

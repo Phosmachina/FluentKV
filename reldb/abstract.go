@@ -313,7 +313,7 @@ func Insert[T IObject](db IRelationalDB, value T) (*ObjWrapper[T], []error) {
 	return NewObjWrapper(db, id, &value), errors
 }
 
-// Set override the value at the id specified with the passed value. The id shall exist.
+// Set override the value at id specified with the passed value. The id shall exist.
 func Set[T IObject](db IRelationalDB, id string, value T) (*ObjWrapper[T], []error) {
 
 	if errors := db.Set(id, value); errors != nil {
@@ -323,7 +323,7 @@ func Set[T IObject](db IRelationalDB, id string, value T) (*ObjWrapper[T], []err
 	return NewObjWrapper(db, id, &value), nil
 }
 
-// SetWrp same as set but take a wrapped object in argument.
+// SetWrp same as Set but take a wrapped object in argument.
 func SetWrp[T IObject](db IRelationalDB, objWrp ObjWrapper[T]) (*ObjWrapper[T], []error) {
 	return Set(db, objWrp.ID, objWrp.Value)
 }
@@ -531,7 +531,10 @@ func (db *AbstractRelDB) runBeforeTriggers(
 
 			tCp := t
 			pool.AddTask(func() {
-				errs = append(errs, tCp.StartBefore(id, &value))
+				err := tCp.StartBefore(id, &value)
+				if err != nil {
+					errs = append(errs, err)
+				}
 			})
 		}
 	}
