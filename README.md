@@ -12,6 +12,18 @@
 
 > Purpose a fluent toolkit for using a KV database.
 
+## 🎯 Overview
+
+## ⚡️ Features
+
+## 🚀 Getting started
+
+## 🤝 Contributing
+
+## 🕘 What's next
+
+---
+
 ## System Architecture
 
 ### Interface and Abstract Struct Implementation
@@ -63,10 +75,15 @@ In SQL, a trigger is a stored procedure that runs automatically when an event oc
 the database server. In FluentKV, the concept of a 'trigger' is implemented through
 `AddTrigger` and `DeleteTrigger` functions.
 
-- **`AddTrigger`:** Set up a trigger which fires either before or after a
+- **`AddAfterTrigger`:** Set up a trigger which fires either before or after a
   specified operation in the table. The trigger is represented by an `action` function
   which is automatically executed when the trigger fires. The `action` function is called
   with the id of the object and the object itself when it's available.
+- **`AddBeforeTrigger`:** The trigger set by this function will be executed before the
+  operation.
+  This allows the current operation to be aborted by returning an error.
+  If multiple triggers are registered before an operation, all will be executed, but if
+  only one returns an error, the operation will be aborted.
 - **`DeleteTrigger`:** Allows you to remove a previously added trigger from the
   database.
   All you need is to provide the id of the trigger to be deleted.
@@ -230,15 +247,21 @@ db, _ := NewBadgerDB("data")
 - **AddTrigger:**
   ```go
   // Add a trigger to log person inserted:
-  _ = AddTrigger(db, "log", InsertOperation, false, func(id string, person Person) {
+  _ = AddAfterTrigger(db, "log", InsertOperation, false, func(id string, person Person) {
       fmt.println("new person added:", person.Firstname)
   })
   
   // Add a trigger to multiple operation:
-  _ = AddTrigger(db, "my trigger", UpdateOperation | DeleteOperation, false,
+  _ = AddAfterTrigger(db, "my trigger", UpdateOperation | DeleteOperation, false,
           func(id string, person Person) {
               // Do something
-              // Caution: delete operation not provide the value (person == nil)
+          })
+
+    // Add a trigger before an operation:
+  _ = AddBeforeTrigger(db, "check", InsertOperation, false,
+          func(id string, person Person) error {
+              // Perform some check
+			  return nil // Or return error to cancel current operation
           })
   ```
 
