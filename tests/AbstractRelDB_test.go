@@ -47,19 +47,23 @@ func Test_AddTriggerForInsert(t *testing.T) {
 	}
 }
 
-func Test_AddTriggerForGet(t *testing.T) {
-	//db := prepareTest(t.TempDir())
+func Test_CancelGetWithTrigger(t *testing.T) {
+	object := NewSimpleType("val for t1", "val for t2", 42)
+	db := prepareTest(t.TempDir())
+	CustomError := errors.New("some error")
 
-}
+	err := AddBeforeTrigger(db, "my trigger", InsertOperation,
+		func(id string, value *SimpleType) error {
+			return CustomError
+		})
+	if err != nil {
+		t.FailNow()
+	}
 
-func Test_AddTriggerForUpdate(t *testing.T) {
-	//db := prepareTest(t.TempDir())
-
-}
-
-func Test_AddTriggerForDelete(t *testing.T) {
-	//db := prepareTest(t.TempDir())
-
+	_, errs := Insert(db, object)
+	if errs == nil || !errors.Is(errs[0], CustomError) {
+		t.Error("The operation was not been cancelled by trigger as expected.")
+	}
 }
 
 func Test_AddTriggerForMultipleOperation(t *testing.T) {
