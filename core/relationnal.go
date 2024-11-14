@@ -1,12 +1,7 @@
-package fluentkv
+package core
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
-	"fmt"
-	"log"
-	"reflect"
 )
 
 var (
@@ -16,16 +11,10 @@ var (
 	PreAutoKavlb = "tank%avlb_"
 	// PreAutoKused prefix for used keys.
 	PreAutoKused = "tank%used_"
-	// PrefixLink prefix for a link declaration.
-	PrefixLink = "link%"
-	// PrefixTable prefix for a table entry.
-	PrefixTable = "tbl%"
-
-	// Delimiter between the tableName and the key
-	Delimiter     = "_"
-	LinkDelimiter = "@"
 
 	ErrInvalidId         = errors.New("the id specified is nod used in the db")
+	ErrFailedToSet       = errors.New("the set operation failed")
+	ErrSelfBind          = errors.New("try to link object to itself")
 	ErrDuplicateTrigger  = errors.New("the trigger with same id for this table name is already added")
 	ErrInexistantTrigger = errors.New("the trigger does not exist")
 )
@@ -42,26 +31,25 @@ a key is structured to store a flattened hierarchy.
 
 To make uniq key, a tank key system is implemented and can be used with GetKey,
 FreeKey. The global AutoKeyBuffer defined the size of this tank. When the value is inserted,
-a key is picked in the tank. When entry is deleted, the key becomes available again via GetKey.
+a key is picked in the tank. After deleting an entry, the key becomes available again via GetKey.
 
 # Operators
 
 Interface is designed so that all raw operators must be implemented; other can be but are already
-
-	implemented in the abstraction AbstractRelDB. Raw Operators probably work directly with the db driver and are used by all other operators.
+implemented in the abstraction AbstractRelDB. Raw Operators probably work directly with the db driver and are used by all other operators.
 */
 type IRelationalDB interface {
-	// GetKey pick a key in tank of unique keys.
+	// GetKey pick a key in the tank of unique keys.
 	//If the tank is empty, it will be filled with new keys.
 	GetKey() string
-	// FreeKey check if key is used and make the key available again.
+	// FreeKey check if the key is used and make the key available again.
 	FreeKey(key ...string)
-	// Close set the db to the closed state and finally close the db.
+	// Close, set the db to the closed state and finally close the db.
 	Close()
 
 	// RawSet set a value in DB. Prefix and key are simply concatenated.
-	// Don't care about Key is already in use or not.
-	RawSet(prefix string, key string, value []byte)
+	// Don't care about Key is already in use or not. Return false when the operation failed.
+	RawSet(prefix string, key string, value []byte) bool
 	// RawGet get a value in DB. Prefix and key are simply concatenated.
 	// If no value corresponding to this Key, empty slice and false should be returned.
 	RawGet(prefix string, key string) ([]byte, bool)
@@ -116,84 +104,3 @@ type IRelationalDB interface {
 	// operations.
 	getAbstractRelDB() *AbstractRelDB
 }
-
-// region Helpers
-
-func MakePrefix(tableName string) string {
-	return PrefixTable + tableName + Delimiter
-}
-
-func MakeKey(tableName, id string) []byte {
-	return []byte(MakePrefix(tableName) + id)
-}
-
-func MakeLinkKey(tableName string, id string, targetName string, targetId string) []string {
-
-	k1 := tableName + Delimiter + id
-	k2 := targetName + Delimiter + targetId
-
-	return []string{k1 + LinkDelimiter + k2, k2 + LinkDelimiter + k1}
-}
-
-func Encode(obj *IObject) []byte {
-
-	buffer := bytes.Buffer{}
-	err := gob.NewEncoder(&buffer).Encode(obj)
-	if err != nil {
-		// TODO return err ; make some custom err
-		log.Printf(err.Error())
-		return nil
-	}
-	return buffer.Bytes()
-}
-
-func Decode(value []byte) *IObject {
-
-	buffer := bytes.Buffer{}
-	var object *IObject
-	buffer.Write(value)
-	err := gob.NewDecoder(&buffer).Decode(&object)
-	if err != nil {
-		return nil
-		// TODO return nil/err ; make some custom err
-	}
-
-	return object
-}
-
-// endregion
-
-// region Utils
-
-// NameOfStruct simply reflect the name of the type T.
-func NameOfStruct[T any]() string {
-	return reflect.TypeOf((*T)(nil)).Elem().Name()
-}
-
-// ToString prints the name of type and all field names with the corresponding value.
-func ToString(v any) string {
-
-	typeOf := reflect.TypeOf(v)
-	result := typeOf.Name()
-	value := reflect.ValueOf(v)
-
-	for i := 0; i < typeOf.NumField(); i++ {
-		field := typeOf.Field(i)
-		result += fmt.Sprintf(" | %s: %v", field.Name, value.Field(i))
-	}
-
-	return result
-}
-
-// IndexOf returns the index of the first occurrence of an element in the provided slice,
-// or -1 if any element is not present in the slice.
-func IndexOf[T comparable](element T, data []T) int {
-	for k, v := range data {
-		if element == v {
-			return k
-		}
-	}
-	return -1 // not found.
-}
-
-// endregion

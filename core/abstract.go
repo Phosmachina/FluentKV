@@ -1,6 +1,7 @@
-package fluentkv
+package core
 
 import (
+	. "github.com/Phosmachina/FluentKV/helper"
 	"strconv"
 	"strings"
 	"sync"
@@ -102,7 +103,9 @@ func (db *AbstractRelDB) Insert(object IObject) (string, []error) {
 	id := db.GetKey()
 
 	errors := db.withTriggerWrapper(id, &object, InsertOperation, func() error {
-		db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+		if !db.RawSet(MakePrefix(object.TableName()), id, Encode(&object)) {
+			return ErrFailedToSet
+		}
 		return nil
 	})
 
@@ -116,7 +119,9 @@ func (db *AbstractRelDB) Set(id string, object IObject) []error {
 	}
 
 	return db.withTriggerWrapper(id, &object, UpdateOperation, func() error {
-		db.RawSet(MakePrefix(object.TableName()), id, Encode(&object))
+		if !db.RawSet(MakePrefix(object.TableName()), id, Encode(&object)) {
+			return ErrFailedToSet
+		}
 		return nil
 	})
 }
@@ -671,11 +676,9 @@ func AddAfterTrigger[T IObject](
 	}
 
 	db.m.Lock()
-	index := indexOf(triggerToBeAdded, db.triggers)
-	if index != -1 {
+	if indexOf(triggerToBeAdded, db.triggers) != -1 {
 		return ErrDuplicateTrigger
 	}
-
 	db.triggers = append(db.triggers, triggerToBeAdded)
 	db.m.Unlock()
 

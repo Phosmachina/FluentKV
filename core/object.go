@@ -1,4 +1,4 @@
-package fluentkv
+package core
 
 import (
 	"crypto/md5"
@@ -39,16 +39,16 @@ func NewObjWrapper[T IObject](db IRelationalDB, ID string, value *T) *ObjWrapper
 }
 
 // Link add a link between s object and all targets objects.
-// The biDirectional attribute determine if for target is also connected to s:
+// The biDirectional attribute determines if for target is also connected to s:
 //
 //		 biDirectional == false: s -> t
 //
 //		 biDirectional == true:  s -> t
 //	                          s <- t
-func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ...*ObjWrapper[T]) {
+func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ...*ObjWrapper[T]) error {
 
 	if !ExistWrp(s) {
-		return
+		return ErrInvalidId
 	}
 
 	TName := TableName[T]()
@@ -58,22 +58,27 @@ func Link[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, targets ..
 		exist := s.db.Exist(TName, v.ID)
 		if !exist {
 			log.Printf("Id '%s' not found and cannot be link.", v.ID)
-			continue
+			return ErrInvalidId
 		}
 		if v.ID == s.ID {
-			log.Println("Can't bind object himself...")
-			continue
+			return ErrSelfBind
 		}
 		k := MakeLinkKey(SName, s.ID, TName, v.ID)
 		if biDirectional {
-			s.db.RawSet(PrefixLink, k[1], nil)
+			if !s.db.RawSet(PrefixLink, k[1], nil) {
+				return ErrFailedToSet
+			}
 		}
-		s.db.RawSet(PrefixLink, k[0], nil)
+		if !s.db.RawSet(PrefixLink, k[0], nil) {
+			return ErrFailedToSet
+		}
 	}
+
+	return nil
 }
 
-// LinkNew same as Link but take IObject array and insert them in the db then return the resulting
-// wrapping.
+// LinkNew same as Link but take IObject array and insert them in the db,
+// then return the resulting wrapping.
 func LinkNew[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, objs ...T) []*ObjWrapper[T] {
 
 	if !ExistWrp(s) {
@@ -94,7 +99,7 @@ func LinkNew[S IObject, T IObject](s *ObjWrapper[S], biDirectional bool, objs ..
 
 // TODO potentially make FromLink method
 
-// AllFromLink returned all object, with the tableName induced by T, connected to the S object.
+// AllFromLink returned all objects, with the tableName induced by T, connected to the S object.
 func AllFromLink[S IObject, T IObject](db IRelationalDB, idOfS string) []*ObjWrapper[T] {
 
 	var results []*ObjWrapper[T]
@@ -114,12 +119,12 @@ func AllFromLink[S IObject, T IObject](db IRelationalDB, idOfS string) []*ObjWra
 	return results
 }
 
-// AllFromLinkWrp returned all object, with the tableName induced by T, connected to the S object.
+// AllFromLinkWrp returned all objects, with the tableName induced by T, connected to the S object.
 func AllFromLinkWrp[S IObject, T IObject](s *ObjWrapper[S]) []*ObjWrapper[T] {
 	return AllFromLink[S, T](s.db, s.ID) // TODO check nil Wrapper value?
 }
 
-// RemoveLink remove all link between s and t object. Return true if the link s->t are deleted (is
+// RemoveLink remove all link between s and t object. Return true if links s->t are deleted (is
 // at least the link created when isBidirectional == false).
 func RemoveLink[S IObject, T IObject](db IRelationalDB, idOfS string, idOfT string) bool {
 
@@ -132,7 +137,7 @@ func RemoveLink[S IObject, T IObject](db IRelationalDB, idOfS string, idOfT stri
 	return db.RawDelete(PrefixLink, k[0])
 }
 
-// RemoveLinkWrp remove all link between s and t object. Return true if the link s->t are deleted (is
+// RemoveLinkWrp remove all link between s and t object. Return true if links s->t are deleted (is
 // at least the link created when isBidirectional == false).
 func RemoveLinkWrp[S IObject, T IObject](s *ObjWrapper[S], t *ObjWrapper[T]) bool {
 	return RemoveLink[S, T](s.db, s.ID, t.ID)
