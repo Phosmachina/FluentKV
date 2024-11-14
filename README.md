@@ -12,31 +12,40 @@
 
 > Purpose a fluent toolkit for using a KV database.
 
-## 🎯 Overview
+[//]: # (## 🎯 Overview)
 
-## ⚡️ Features
+[//]: # (## ⚡️ Features)
 
-## 🚀 Getting started
+[//]: # (## 🚀 Getting started)
 
-## 🤝 Contributing
+[//]: # (## 🤝 Contributing)
 
-## 🕘 What's next
+[//]: # (## 🕘 What's next)
 
----
+[//]: # (---)
 
 ## System Architecture
 
 ### Interface and Abstract Struct Implementation
 
-The interface **IRelationalDB** defines a set of raw operations that must be implemented. It also holds some additional simpler operations already realized but they can be overridden if required. For further details, refer to the file `reldb/relational.go`.
+The interface **IRelationalDB** defines a set of raw operations that must be implemented.
+It also holds some additional simpler operations already realized, but they can be
+overridden if required. For further details, refer to the file `core/relational.go`.
 
-The abstract struct **AbstractRelDB** extends **IRelationalDB**. It pre-implements the key filler system and all other operations using raw operations provided by the implementation. Check the file `reldb/abstract.go` for a comprehensive understanding.
+The abstract struct **AbstractRelDB** extends **IRelationalDB**. It pre-implements the key
+filler system and all other operations using raw operations provided by the
+implementation. Check the file `core/abstract.go` for a comprehensive understanding.
 
 ### IObject Interface and ObjWrapper Struct
 
-The `IObject` interface contains operations essential for this architecture. These operations, such as `Equals`, `Hash`, are primarily implemented with the `DBObject` abstraction but the `TableName` function needs explicit implementation. This function generates a key corresponding to data.
+The `IObject` interface contains operations essential for this architecture. These
+operations, such as `Equals`, `Hash`, are primarily implemented with the `DBObject`
+abstraction but the `TableName` function needs explicit implementation. This function
+generates a key corresponding to data.
 
-The `ObjWrapper` struct is a helper to store a value along with its unique id. It is used extensively across this toolkit to bind the IObject with the database or to return the value with its corresponding id.
+The `ObjWrapper` struct is a helper to store a value along with its unique id. It is used
+extensively across this toolkit to bind the IObject with the database or to return the
+value with its corresponding id.
 
 ### Implementation
 
@@ -93,7 +102,7 @@ database.
 
 ## Usage
 
-> This section explains basic usage with preparation of type and, first of usage and more
+> This section explains basic usage with preparation of a type and, first of usage and more
 > advanced use case.
 > You can also see the test sources for additional information.
 
@@ -115,9 +124,9 @@ type Person struct {
 and `TableName`. You can simply use the helpers like this:
 
 ```go
-func (t Person) ToString() string  { return reldb.ToString(t) }
+func (t Person) ToString() string  { return helper.ToString(t) }
 
-func (t Person) TableName() string { return reldb.NameOfStruct[Person]() }
+func (t Person) TableName() string { return helper.NameOfStruct[Person]() }
 ```
 
 To simplify the construction of `IObject` is recommended to make a constructor (it can
@@ -132,8 +141,8 @@ func NewPerson(firstname string, lastname string, age int) Person {
 }
 ```
 
-In last time, you need to register your type to Gob (the binary serializer used) like this (simply
-do it before use):
+In last time, you need to register your type to Gob (the binary serializer used) like
+this (do it before use):
 
 ```go
 gob.Register(Person{})
@@ -143,7 +152,7 @@ gob.Register(Person{})
 
 ```go
 // Initialize db
-AutoKeyBuffer = 10
+AutoKeyBuffer = 10 // Optional tweaking
 db, _ := NewBadgerDB("data")
 ```
 
@@ -181,7 +190,7 @@ db, _ := NewBadgerDB("data")
   
   addressWrp := Insert(db, NewAddress("", ""))
   Link(addressWrp, true, personWrapped)
-  // We can do this instead of:
+  // We can similarly do this:
   // addressWrp := LinkNew(NewAddress("", ""), true, personWrapped)
   
   AllFromLink[Person, Address](personWrapped) // Result is an array with only addressWrp.
@@ -220,7 +229,7 @@ db, _ := NewBadgerDB("data")
   })
   
   // Or search all persons more than 22 years old (Richard, James):
-  results := FindFirst(db, func(id string, person *Person) bool {
+  results := FindAll(db, func(id string, person *Person) bool {
       return person.Age > 22
   })
   ```
