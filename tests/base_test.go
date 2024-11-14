@@ -2,8 +2,9 @@ package tests
 
 import (
 	"encoding/gob"
-	. "github.com/Phosmachina/FluentKV/reldb"
-	. "github.com/Phosmachina/FluentKV/reldb/impl"
+	. "github.com/Phosmachina/FluentKV/core"
+	. "github.com/Phosmachina/FluentKV/helper"
+	. "github.com/Phosmachina/FluentKV/implementation"
 )
 
 // region DB Object type declaration
@@ -44,7 +45,7 @@ func (t AnotherType) TableName() string { return NameOfStruct[AnotherType]() }
 // prepareTest clean previous data, register the DB type for Gob, create a new DB.
 func prepareTest(dir string) IRelationalDB {
 
-	// Register type used in db
+	// Register the type used in db
 	gob.Register(SimpleType{})
 	gob.Register(AnotherType{})
 

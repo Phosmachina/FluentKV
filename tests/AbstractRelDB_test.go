@@ -2,7 +2,7 @@ package tests
 
 import (
 	"errors"
-	. "github.com/Phosmachina/FluentKV/reldb"
+	. "github.com/Phosmachina/FluentKV/core"
 	"testing"
 )
 

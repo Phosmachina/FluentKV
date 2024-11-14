@@ -1,10 +1,10 @@
-package driver
+package implementation
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
-	. "github.com/Phosmachina/FluentKV/reldb"
+	. "github.com/Phosmachina/FluentKV/core"
 	"github.com/dgraph-io/badger"
 	"os"
 	"runtime"
@@ -76,15 +76,13 @@ var iterOptionsNoValues = badger.IteratorOptions{
 
 // region IRelationalDB implementation
 
-func (db *BadgerDB) RawSet(prefix string, key string, value []byte) {
+func (db *BadgerDB) RawSet(prefix string, key string, value []byte) bool {
 
 	err := db.Service.Update(func(txn *badger.Txn) error {
 		return txn.SetEntry(badger.NewEntry([]byte(prefix+key), value))
 	})
 
-	if err != nil {
-		// TODO golog.Error(err)
-	}
+	return err == nil
 }
 
 func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {

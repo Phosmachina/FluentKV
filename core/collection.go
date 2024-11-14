@@ -1,4 +1,4 @@
-package fluentkv
+package core
 
 import (
 	"sort"

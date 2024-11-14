@@ -2,7 +2,8 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/Phosmachina/FluentKV/reldb"
+	. "github.com/Phosmachina/FluentKV/core"
+	. "github.com/Phosmachina/FluentKV/helper"
 	"testing"
 )
 
