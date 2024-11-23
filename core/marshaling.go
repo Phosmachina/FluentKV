@@ -3,31 +3,42 @@ package core
 import (
 	"bytes"
 	"encoding/gob"
-	"log"
+	"errors"
 )
 
-func Encode(obj *IObject) []byte {
+// TODO make an interface to allow marshaling customisations.
 
-	buffer := bytes.Buffer{}
-	err := gob.NewEncoder(&buffer).Encode(obj)
-	if err != nil {
-		// TODO return err ; make some custom err
-		log.Printf(err.Error())
-		return nil
-	}
-	return buffer.Bytes()
+var (
+	EncodeErr = errors.New("encode failed")
+	DecodeErr = errors.New("decode failed")
+)
+
+type IMarshaller interface {
+	Encode(*IObject) ([]byte, error)
+	Decode([]byte) (*IObject, error)
 }
 
-func Decode(value []byte) *IObject {
+type GobMarshaller struct{}
 
+func (g *GobMarshaller) Encode(object *IObject) ([]byte, error) {
 	buffer := bytes.Buffer{}
-	var object *IObject
-	buffer.Write(value)
-	err := gob.NewDecoder(&buffer).Decode(&object)
+	err := gob.NewEncoder(&buffer).Encode(object)
 	if err != nil {
-		return nil
-		// TODO return nil/err ; make some custom err
+		return nil, EncodeErr
 	}
 
-	return object
+	return buffer.Bytes(), nil
+}
+
+func (g *GobMarshaller) Decode(value []byte) (*IObject, error) {
+	buffer := bytes.Buffer{}
+	buffer.Write(value)
+
+	var object *IObject
+	err := gob.NewDecoder(&buffer).Decode(&object)
+	if err != nil {
+		return nil, DecodeErr
+	}
+
+	return object, nil
 }
