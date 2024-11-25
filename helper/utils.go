@@ -35,3 +35,12 @@ func IndexOf[T comparable](element T, data []T) int {
 	}
 	return -1 // not found.
 }
+
+func Remove[T comparable](slice []T, item T) []T {
+	for i, value := range slice {
+		if value == item {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
+}
