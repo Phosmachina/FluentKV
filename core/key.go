@@ -32,13 +32,13 @@ type IKey interface {
 func NewKeyFromString(key string) IKey {
 
 	switch {
-	case strings.HasPrefix(PrefixTankAvailableIds, key):
+	case strings.HasPrefix(key, PrefixTankAvailableIds):
 		return NewTankAvailableKeyFromString(key)
-	case strings.HasPrefix(PrefixTankUsedIds, key):
+	case strings.HasPrefix(key, PrefixTankUsedIds):
 		return NewTankUsedKeyFromString(key)
-	case strings.HasPrefix(PrefixTable, key):
+	case strings.HasPrefix(key, PrefixTable):
 		return NewTableKeyFromString(key)
-	case strings.HasPrefix(PrefixLink, key):
+	case strings.HasPrefix(key, PrefixLink):
 		return NewLinkKeyFromString(key)
 	}
 
@@ -49,33 +49,46 @@ type baseKey struct {
 	IKey
 }
 
-func (b baseKey) RawPrefix() []byte {
+func newBaseKey(key IKey) *baseKey {
+	k := &baseKey{}
+	k.IKey = key
+	return k
+}
+
+func (b *baseKey) RawPrefix() []byte {
 	return []byte(b.Prefix())
 }
 
-func (b baseKey) RawKey() []byte {
+func (b *baseKey) RawKey() []byte {
 	return []byte(b.Key())
 }
 
-type keyWithId struct {
-	baseKey
+type KeyWithId struct {
+	*baseKey
 	id string
 }
 
-func (k keyWithId) Id() string {
+func newKeyWithId(key IKey) *KeyWithId {
+	k := &KeyWithId{}
+	k.baseKey = newBaseKey(key)
+	return k
+}
+
+func (k *KeyWithId) Id() string {
 	return k.id
 }
 
 //region TankAvailableKey
 
 type TankAvailableKey struct {
-	keyWithId
+	*KeyWithId
 	id string
 }
 
-func NewTankAvailableKeyFromString(key string) TankAvailableKey {
+func NewTankAvailableKeyFromString(key string) *TankAvailableKey {
 
-	availableKey := TankAvailableKey{}
+	availableKey := &TankAvailableKey{}
+	availableKey.KeyWithId = newKeyWithId(availableKey)
 
 	id, found := strings.CutPrefix(key, PrefixTankAvailableIds)
 	if !found || len(id) == 0 {
@@ -100,13 +113,14 @@ func (t TankAvailableKey) Key() string {
 //region TankUsedKey
 
 type TankUsedKey struct {
-	keyWithId
+	*KeyWithId
 	id string
 }
 
-func NewTankUsedKeyFromString(key string) TankUsedKey {
+func NewTankUsedKeyFromString(key string) *TankUsedKey {
 
-	tankUsedKey := TankUsedKey{}
+	tankUsedKey := &TankUsedKey{}
+	tankUsedKey.KeyWithId = newKeyWithId(tankUsedKey)
 
 	id, found := strings.CutPrefix(key, PrefixTankUsedIds)
 	if !found || len(id) == 0 {
@@ -131,45 +145,53 @@ func (t TankUsedKey) Key() string {
 //region TableKey
 
 type TableKey struct {
-	keyWithId
+	*KeyWithId
 	name string
 }
 
-func NewTableKeyFromString(key string) TableKey {
+func NewProtoTableKey() *TableKey {
+	key := &TableKey{}
+	key.KeyWithId = newKeyWithId(key)
+	return key
+}
 
-	tableKey := TableKey{}
-	tableKey.IKey = tableKey
+func NewTableKeyFromString(key string) *TableKey {
+
+	tableKey := NewProtoTableKey()
 
 	after, _ := strings.CutPrefix(key, PrefixTable)
 
-	split := strings.Split(after, IdDelimiter)
-	if len(split) != 2 {
-		return tableKey
+	tableName, id, found := strings.Cut(after, IdDelimiter)
+	tableKey.name = tableName
+	if found {
+		tableKey.id = id
 	}
-	tableKey.name = split[0]
-	tableKey.id = split[1]
 
 	return tableKey
 }
 
-func NewTableKeyFromObject(object IObject) TableKey {
-	return TableKey{name: object.TableName()}
+func NewTableKeyFromObject(object IObject) *TableKey {
+	key := NewProtoTableKey()
+	key.name = object.TableName()
+	return key
 }
 
-func NewTableKey[T IObject]() TableKey {
-	return TableKey{name: TableName[T]()}
+func NewTableKey[T IObject]() *TableKey {
+	key := NewProtoTableKey()
+	key.name = TableName[T]()
+	return key
 }
 
-func (k TableKey) Name() string {
+func (k *TableKey) Name() string {
 	return k.name
 }
 
-func (k TableKey) SetId(id string) TableKey {
+func (k *TableKey) SetId(id string) *TableKey {
 	k.id = id
 	return k
 }
 
-func (k TableKey) Prefix() string {
+func (k *TableKey) Prefix() string {
 
 	if len(k.name) == 0 {
 		return PrefixTable
@@ -178,15 +200,15 @@ func (k TableKey) Prefix() string {
 	return PrefixTable + k.name + IdDelimiter
 }
 
-func (k TableKey) Key() string {
+func (k *TableKey) Key() string {
 	return k.Prefix() + k.id
 }
 
-func (k TableKey) Base() string {
+func (k *TableKey) Base() string {
 	return k.name + IdDelimiter + k.id
 }
 
-func (k TableKey) Equals(key TableKey) bool {
+func (k *TableKey) Equals(key *TableKey) bool {
 	return k.name == key.name && k.id == key.id
 }
 
@@ -195,43 +217,51 @@ func (k TableKey) Equals(key TableKey) bool {
 //region LinkKey
 
 type LinkKey struct {
-	baseKey
-	currentTableKey TableKey
-	targetTableKey  TableKey
+	*baseKey
+	currentTableKey *TableKey
+	targetTableKey  *TableKey
 }
 
-func NewLinkKeyFromString(key string) LinkKey {
+func NewProtoLinkKey() *LinkKey {
+	k := &LinkKey{}
+	k.baseKey = newBaseKey(k)
+	return k
+}
+
+func NewLinkKeyFromString(key string) *LinkKey {
 
 	base, _ := strings.CutPrefix(key, PrefixLink)
 
 	links := strings.Split(base, LinkDelimiter)
 	if len(links) != 2 {
-		return LinkKey{}
+		return NewProtoLinkKey()
 	}
 
 	return NewLinkKey(NewTableKeyFromString(links[0]), NewTableKeyFromString(links[1]))
 }
 
-func NewLinkKey(current TableKey, target TableKey) LinkKey {
-	return LinkKey{
-		currentTableKey: current,
-		targetTableKey:  target,
-	}
+func NewLinkKey(current *TableKey, target *TableKey) *LinkKey {
+
+	key := NewProtoLinkKey()
+	key.currentTableKey = current
+	key.targetTableKey = target
+
+	return key
 }
 
-func (l LinkKey) CurrentTableKey() TableKey {
+func (l *LinkKey) CurrentTableKey() *TableKey {
 	return l.currentTableKey
 }
 
-func (l LinkKey) TargetTableKey() TableKey {
+func (l *LinkKey) TargetTableKey() *TableKey {
 	return l.targetTableKey
 }
 
-func (l LinkKey) Prefix() string {
+func (l *LinkKey) Prefix() string {
 	return PrefixLink
 }
 
-func (l LinkKey) Key() string {
+func (l *LinkKey) Key() string {
 	return l.Prefix() +
 		l.currentTableKey.Base() +
 		LinkDelimiter +
