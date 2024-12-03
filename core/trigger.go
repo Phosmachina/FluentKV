@@ -16,7 +16,7 @@ func (o Operation) Contain(s Operation) bool {
 	return o&s == s
 }
 
-// CRUD Operation used for trigger as filter.
+// CRUD Operation used for trigger as a filter.
 const (
 	GetOperation Operation = 1 << iota
 	InsertOperation
@@ -29,8 +29,8 @@ type ITrigger interface {
 	GetTableName() string
 	GetOperation() Operation
 	IsBefore() bool
-	StartBefore(IKey, *IObject) bool
-	StartAfter(IKey, *IObject)
+	StartBefore(Operation, IKey, *IObject) bool
+	StartAfter(Operation, IKey, *IObject)
 	Equals(other ITrigger) bool
 }
 
@@ -39,8 +39,8 @@ type trigger[T IObject] struct {
 	tableName  string
 	operations Operation
 	isBefore   bool
-	beforeTask func(key IKey, value *T) bool
-	afterTask  func(key IKey, value *T)
+	beforeTask func(operation Operation, key IKey, value *T) bool
+	afterTask  func(operation Operation, key IKey, value *T)
 }
 
 func (t trigger[T]) GetId() string {
@@ -58,14 +58,14 @@ func (t trigger[T]) IsBefore() bool {
 	return t.isBefore
 }
 
-func (t trigger[T]) StartBefore(key IKey, value *IObject) bool {
+func (t trigger[T]) StartBefore(operation Operation, key IKey, value *IObject) bool {
 	v := (*value).(T)
-	return t.beforeTask(key, &v)
+	return t.beforeTask(operation, key, &v)
 }
 
-func (t trigger[T]) StartAfter(key IKey, value *IObject) {
+func (t trigger[T]) StartAfter(operation Operation, key IKey, value *IObject) {
 	v := (*value).(T)
-	t.afterTask(key, &v)
+	t.afterTask(operation, key, &v)
 }
 
 func (t trigger[T]) Equals(other ITrigger) bool {
