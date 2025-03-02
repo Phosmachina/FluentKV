@@ -14,15 +14,16 @@ var (
 )
 
 type IMarshaller interface {
-	Encode(*IObject) ([]byte, error)
-	Decode([]byte) (*IObject, error)
+	Encode(*any) ([]byte, error)
+	Decode([]byte) (*any, error)
 }
 
 type GobMarshaller struct{}
 
-func (g *GobMarshaller) Encode(object *IObject) ([]byte, error) {
+func (g *GobMarshaller) Encode(value *any) ([]byte, error) {
+
 	buffer := bytes.Buffer{}
-	err := gob.NewEncoder(&buffer).Encode(object)
+	err := gob.NewEncoder(&buffer).Encode(value)
 	if err != nil {
 		return nil, EncodeErr
 	}
@@ -30,15 +31,16 @@ func (g *GobMarshaller) Encode(object *IObject) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-func (g *GobMarshaller) Decode(value []byte) (*IObject, error) {
+func (g *GobMarshaller) Decode(value []byte) (*any, error) {
+
 	buffer := bytes.Buffer{}
 	buffer.Write(value)
 
-	var object *IObject
+	var object any
 	err := gob.NewDecoder(&buffer).Decode(&object)
 	if err != nil {
 		return nil, DecodeErr
 	}
 
-	return object, nil
+	return &object, nil
 }

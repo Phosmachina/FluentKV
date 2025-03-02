@@ -25,51 +25,50 @@ const (
 )
 
 type ITrigger interface {
-	GetId() string
-	GetTableName() string
-	GetOperation() Operation
+	Id() string
+	TableName() string
+	Operation() Operation
 	IsBefore() bool
-	StartBefore(Operation, IKey, *IObject) bool
-	StartAfter(Operation, IKey, *IObject)
-	Equals(other ITrigger) bool
+	StartBefore(Operation, IKey, *any) bool
+	StartAfter(Operation, IKey, *any)
+	Equals(ITrigger) bool
 }
 
-type trigger[T IObject] struct {
+type trigger struct {
 	id         string
 	tableName  string
 	operations Operation
 	isBefore   bool
-	beforeTask func(operation Operation, key IKey, value *T) bool
-	afterTask  func(operation Operation, key IKey, value *T)
+	beforeTask func(operation Operation, key IKey, value *any) bool
+	afterTask  func(operation Operation, key IKey, value *any)
 }
 
-func (t trigger[T]) GetId() string {
+func (t trigger) Id() string {
 	return t.id
 }
 
-func (t trigger[T]) GetTableName() string {
+func (t trigger) TableName() string {
 	return t.tableName
 }
-func (t trigger[T]) GetOperation() Operation {
+
+func (t trigger) Operation() Operation {
 	return t.operations
 }
 
-func (t trigger[T]) IsBefore() bool {
+func (t trigger) IsBefore() bool {
 	return t.isBefore
 }
 
-func (t trigger[T]) StartBefore(operation Operation, key IKey, value *IObject) bool {
-	v := (*value).(T)
-	return t.beforeTask(operation, key, &v)
+func (t trigger) StartBefore(operation Operation, key IKey, value *any) bool {
+	return t.beforeTask(operation, key, value)
 }
 
-func (t trigger[T]) StartAfter(operation Operation, key IKey, value *IObject) {
-	v := (*value).(T)
-	t.afterTask(operation, key, &v)
+func (t trigger) StartAfter(operation Operation, key IKey, value *any) {
+	t.afterTask(operation, key, value)
 }
 
-func (t trigger[T]) Equals(other ITrigger) bool {
-	return t.GetTableName() == other.GetTableName() && t.GetId() == other.GetId()
+func (t trigger) Equals(other ITrigger) bool {
+	return t.TableName() == other.TableName() && t.Id() == other.Id()
 }
 
 func indexOf(t ITrigger, triggers []ITrigger) int {
