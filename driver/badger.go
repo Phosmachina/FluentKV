@@ -1,7 +1,6 @@
-package implementation
+package driver
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	. "github.com/Phosmachina/FluentKV/core"
@@ -16,12 +15,12 @@ const (
 )
 
 type BadgerDB struct {
-	AbstractRelDB
 	Service *badger.DB
 	closed  uint32 // if 1 is closed.
 }
 
-func NewBadgerDB(directoryPath string) (IRelationalDB, error) {
+func NewBadgerDB(directoryPath string) (*KVStoreManager, error) {
+
 	if directoryPath == "" {
 		return nil, errors.New("directoryPath is empty")
 	}
@@ -44,17 +43,16 @@ func NewBadgerDB(directoryPath string) (IRelationalDB, error) {
 	}
 
 	db := &BadgerDB{Service: service}
-	db.AbstractRelDB = *NewAbstractRelDB(db)
-	runtime.SetFinalizer(db, closeDB)
+	runtime.SetFinalizer(db, closeBadgerDB)
 
-	return db, nil
+	return NewKVStoreManager(db), nil
 }
 
 func (db *BadgerDB) Close() {
-	_ = closeDB(db)
+	_ = closeBadgerDB(db)
 }
 
-func closeDB(db *BadgerDB) error {
+func closeBadgerDB(db *BadgerDB) error {
 
 	if atomic.LoadUint32(&db.closed) > 0 {
 		return nil
@@ -74,23 +72,23 @@ var iterOptionsNoValues = badger.IteratorOptions{
 	AllVersions:    false,
 }
 
-// region IRelationalDB implementation
+// region KVDriver implementation
 
-func (db *BadgerDB) RawSet(prefix string, key string, value []byte) bool {
+func (db *BadgerDB) RawSet(key IKey, value []byte) bool {
 
 	err := db.Service.Update(func(txn *badger.Txn) error {
-		return txn.SetEntry(badger.NewEntry([]byte(prefix+key), value))
+		return txn.SetEntry(badger.NewEntry(key.RawKey(), value))
 	})
 
 	return err == nil
 }
 
-func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
+func (db *BadgerDB) RawGet(key IKey) ([]byte, bool) {
 
 	var value []byte
 
 	err := db.Service.View(func(txn *badger.Txn) error {
-		item, err := txn.Get([]byte(prefix + key))
+		item, err := txn.Get(key.RawKey())
 		if err != nil {
 			return err
 		}
@@ -105,64 +103,70 @@ func (db *BadgerDB) RawGet(prefix string, key string) ([]byte, bool) {
 	}
 
 	if err != nil {
-		// golog.Error(err)
 		return nil, false
 	}
 
 	return value, true
 }
 
-func (db *BadgerDB) RawDelete(prefix string, key string) bool {
+func (db *BadgerDB) RawDelete(key IKey) bool {
+
+	if !db.Exist(key) {
+		return false
+	}
 
 	txn := db.Service.NewTransaction(true)
-	err := txn.Delete([]byte(prefix + key))
+	err := txn.Delete(key.RawKey())
 
 	if err != nil {
-		// golog.Error(err)
 		return false
 	}
 
 	return txn.Commit() == nil
 }
 
-func (db *BadgerDB) RawIterKey(prefix string, action func(key string) (stop bool)) {
-
+func (db *BadgerDB) RawIterKey(
+	key IKey,
+	action func(key IKey) (stop bool),
+) {
 	txn := db.Service.NewTransaction(false)
 	defer txn.Discard()
 
 	iter := txn.NewIterator(iterOptionsNoValues)
 	defer iter.Close()
 
-	pfx := []byte(prefix)
-	for iter.Seek(pfx); iter.ValidForPrefix(pfx); iter.Next() {
-		if action(string(bytes.TrimPrefix(iter.Item().Key(), pfx))) {
+	for iter.Seek(key.RawPrefix()); iter.ValidForPrefix(key.RawPrefix()); iter.Next() {
+		if action(NewKeyFromString(string(iter.Item().Key()))) {
 			return
 		}
 	}
 }
 
-func (db *BadgerDB) RawIterKV(prefix string, action func(key string, value []byte) (stop bool)) {
-
+func (db *BadgerDB) RawIterKV(
+	key IKey,
+	action func(key IKey, value []byte) (stop bool),
+) {
 	txn := db.Service.NewTransaction(false)
 	defer txn.Discard()
 
 	iter := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer iter.Close()
 
-	pfx := []byte(prefix)
 	var value []byte
-	for iter.Seek(pfx); iter.ValidForPrefix(pfx); iter.Next() {
+	for iter.Seek(key.RawPrefix()); iter.ValidForPrefix(key.RawPrefix()); iter.Next() {
 		valueCopy, _ := iter.Item().ValueCopy(value)
 
-		if action(string(bytes.TrimPrefix(iter.Item().Key(), pfx)), valueCopy) {
+		k := string(iter.Item().Key())
+		keyFromString := NewKeyFromString(k)
+		if action(keyFromString, valueCopy) {
 			return
 		}
 	}
 }
 
-func (db *BadgerDB) Exist(tableName string, id string) bool {
+func (db *BadgerDB) Exist(key IKey) bool {
 	return db.Service.View(func(txn *badger.Txn) error {
-		_, err := txn.Get(MakeKey(tableName, id))
+		_, err := txn.Get(key.RawKey())
 		return err
 	}) == nil
 }

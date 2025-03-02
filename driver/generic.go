@@ -1,4 +1,4 @@
-package implementation
+package driver
 
 import (
 	. "github.com/Phosmachina/FluentKV/core"
@@ -6,19 +6,17 @@ import (
 )
 
 type Generic struct {
-	AbstractRelDB
 	store map[string][]byte
 }
 
-func NewGeneric() *Generic {
+func NewGeneric() *KVStoreManager {
 
 	db := &Generic{store: make(map[string][]byte)}
-	db.AbstractRelDB = *NewAbstractRelDB(db)
 
-	return db
+	return NewKVStoreManager(db)
 }
 
-// region IRelationalDB implementation
+// region KVDriver implementation
 
 func (db *Generic) RawSet(key IKey, value []byte) bool {
 	db.store[key.Key()] = value
@@ -31,7 +29,14 @@ func (db *Generic) RawGet(key IKey) ([]byte, bool) {
 }
 
 func (db *Generic) RawDelete(key IKey) bool {
+
+	_, ok := db.store[key.Key()]
+	if !ok {
+		return false
+	}
+
 	delete(db.store, key.Key())
+
 	return true
 }
 
@@ -71,5 +76,7 @@ func (db *Generic) Exist(key IKey) bool {
 	_, ok := db.store[key.Key()]
 	return ok
 }
+
+func (db *Generic) Close() {}
 
 // endregion
