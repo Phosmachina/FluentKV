@@ -1,6 +1,7 @@
 package core
 
 import (
+	. "github.com/Phosmachina/FluentKV/helper"
 	"sort"
 )
 
@@ -16,29 +17,29 @@ func (c *Collection[T]) Swap(i, j int) {
 	c.objects[i], c.objects[j] = c.objects[j], c.objects[i]
 }
 
-type Collection[T IObject] struct {
-	objects    []*ObjWrapper[T]
-	comparator func(x, y *ObjWrapper[T]) bool
+type Collection[T any] struct {
+	objects    []KVWrapper[T]
+	comparator func(x, y KVWrapper[T]) bool
 }
 
-func NewCollection[T IObject](db IRelationalDB) *Collection[T] {
+func NewCollection[T any](db *KVStoreManager) *Collection[T] {
 
-	var list []*ObjWrapper[T]
-	Foreach[T](db, func(id string, value *T) {
-		list = append(list, NewObjWrapper(db, id, value))
+	var list []KVWrapper[T]
+	Foreach[T](db, func(key IKey, value *T) {
+		list = append(list, NewKVWrapper(db, key.(*TableKey), value))
 	})
 
 	return &Collection[T]{objects: list}
 }
 
-// GetArray give the underlying ObjWrapper array of the current collection.
-func (c *Collection[T]) GetArray() []*ObjWrapper[T] {
+// GetArray give the underlying KVWrapper array of the current collection.
+func (c *Collection[T]) GetArray() []KVWrapper[T] {
 	return c.objects
 }
 
 // Sort the collection with the given function used as comparator for each element.
 func (c *Collection[T]) Sort(
-	comparator func(x, y *ObjWrapper[T]) bool,
+	comparator func(x, y KVWrapper[T]) bool,
 ) *Collection[T] {
 
 	c.comparator = comparator
@@ -49,71 +50,18 @@ func (c *Collection[T]) Sort(
 
 // Distinct eliminate all duplicates from the collection.
 //
-// The underlying ObjWrapper array is modified with this operation.
+// The underlying KVWrapper array is modified with this operation.
 func (c *Collection[T]) Distinct() *Collection[T] {
 
 	allKeys := make(map[string]bool)
 
-	var list []*ObjWrapper[T]
+	var list []KVWrapper[T]
 	for _, object := range c.objects {
-		if _, value := allKeys[object.Value.Hash()]; !value {
-			allKeys[object.Value.Hash()] = true
+
+		hash := Hash(object.Value())
+		if _, value := allKeys[hash]; !value {
+			allKeys[hash] = true
 			list = append(list, object)
-		}
-	}
-	c.objects = list
-
-	return c
-}
-
-// Where ; this function considers a collection and the connected collection induced by
-// Link (probably used in a same way for each element of the collection).
-//
-// For each object in collection the predicate is applied with the current object and all
-// connected object given by an AllFromLink operation. If the predicate returns true,
-// the current object is retained.
-//
-// If the option firstOnly is set to true, only the first result of AllFromLink is retained.
-//
-// The result of unlink can be nil and predicate function must manage this case.
-func Where[T IObject, K IObject](
-	firstOnly bool,
-	collection *Collection[T],
-	predicate func(objWrp1 *ObjWrapper[T], objWrp2 *ObjWrapper[K]) bool,
-) *Collection[T] {
-
-	var list []*ObjWrapper[T]
-	for _, objCol1 := range collection.objects {
-		objectsWrp := AllFromLink[T, K](objCol1.db, objCol1.ID)
-		if len(objectsWrp) > 1 && firstOnly {
-			objectsWrp = objectsWrp[1:]
-		}
-		for _, objCol2 := range objectsWrp {
-			if predicate(objCol1, objCol2) {
-				list = append(list, objCol1)
-				break
-			}
-		}
-	}
-	collection.objects = list
-
-	return collection
-}
-
-// Filter iterate on the collection and for each object apply the predicate.
-// If the result is true, the object is retained.
-//
-// Note: technically you can use this function to get the same result as Where operation.
-//
-// The underlying ObjWrapper array is modified with this operation.
-func (c *Collection[T]) Filter(
-	predicate func(objWrp *ObjWrapper[T]) bool,
-) *Collection[T] {
-
-	var list []*ObjWrapper[T]
-	for _, objWrp := range c.objects {
-		if predicate(objWrp) {
-			list = append(list, objWrp)
 		}
 	}
 	c.objects = list
