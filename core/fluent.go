@@ -4,17 +4,22 @@ import "github.com/Phosmachina/FluentKV/helper"
 
 //region Base
 
-// TableName is a helper to call the TableName from T any implementation.
+// TableName returns the name of the table generated from the type parameter.
 func TableName[T any]() string {
 	var t T
 	return helper.StructName(t)
 }
 
-// Insert in the db the value and return the resulting wrapper.
+// Insert stores a new value in the database and returns a wrapper around it.
+// This is the primary way to insert a brand-new record of type T.
+//
+// Possible Error:
+//   - ErrFailedToSet: If the underlying driver fails to store the data.
 func Insert[T any](db *KVStoreManager, value *T) (KVWrapper[T], error) {
 
 	valueAsAny := any(*value)
 	tableKey, err := db.Insert(&valueAsAny)
+
 	if err != nil {
 		return KVWrapper[T]{}, err
 	}
@@ -22,12 +27,17 @@ func Insert[T any](db *KVStoreManager, value *T) (KVWrapper[T], error) {
 	return NewKVWrapper(db, tableKey, value), nil
 }
 
-// Set override the value at Id specified with the passed value. The Id shall exist.
+// Set updates a value that must already exist, identified by a specific string ID.
+// If the ID is valid, returns a new wrapper of the updated value.
+//
+// Possible Error:
+//   - ErrInvalidId: If the specified ID is not recognized in the database.
+//   - ErrFailedToSet: If the underlying driver fails to update the data.
 func Set[T any](db *KVStoreManager, id string, value *T) (KVWrapper[T], error) {
 
 	tableKey := NewTableKey[T]().SetId(id)
-
 	valueAsAny := any(value)
+
 	if err := db.Set(tableKey, &valueAsAny); err != nil {
 		return KVWrapper[T]{}, err
 	}
@@ -35,12 +45,17 @@ func Set[T any](db *KVStoreManager, id string, value *T) (KVWrapper[T], error) {
 	return NewKVWrapper(db, tableKey, value), nil
 }
 
-// SetWrp same as Set but take a wrapped object in argument.
+// SetWrp is similar to Set, but takes a KVWrapper instead of separate parameters.
+// It updates the wrapped object's value in the database.
 func SetWrp[T any](objWrp KVWrapper[T]) (KVWrapper[T], error) {
 	return Set(objWrp.db, objWrp.key.id, objWrp.value)
 }
 
-// Get the value in db based on Id and the tableName induced by the T parameter.
+// Get retrieves a value from the database by its string ID. A successful call
+// returns a wrapper containing the retrieved data.
+//
+// Possible Error:
+//   - ErrInvalidId: If the specified ID is not found in the database.
 func Get[T any](db *KVStoreManager, id string) (KVWrapper[T], error) {
 
 	tableKey := NewTableKey[T]().SetId(id)
@@ -55,8 +70,13 @@ func Get[T any](db *KVStoreManager, id string) (KVWrapper[T], error) {
 	return NewKVWrapper(db, tableKey, &valueAsT), nil
 }
 
-// Update the value determine with the Id and the tableName induced by the T parameter.
-// The result of the editor function is set in the db.
+// Update fetches an existing record by ID, applies a user-defined function
+// to modify the record, and writes the changes back to the database.
+// Returns a wrapper around the updated value.
+//
+// Possible Error:
+//   - ErrInvalidId: If the specified ID is not recognized in the database.
+//   - ErrFailedToSet: If the underlying driver fails to update the modified data.
 func Update[T any](
 	db *KVStoreManager,
 	id string,
@@ -72,6 +92,7 @@ func Update[T any](
 		valueAsAny := any(valueAsT)
 		return &valueAsAny
 	})
+
 	if err != nil {
 		return KVWrapper[T]{}, err
 	}
@@ -79,51 +100,54 @@ func Update[T any](
 	return NewKVWrapper(db, tableKey, &valueAsT), nil
 }
 
-// Delete the object determined with the Id and the tableName induced by the T parameter.
-// Id is released and related links are deleted.
+// Delete removes an object by its ID from the database.
+// Once deleted, the ID is freed for future re-use and any related links are also removed.
+//
+// Possible Error:
+//   - ErrInvalidId: If the specified ID is not found or cannot be removed.
 func Delete[T any](db *KVStoreManager, id string) error {
 	return db.Delete(NewTableKey[T]().SetId(id))
 }
 
-// DeleteWrp the object determined with the Id and the tableName induced by the T
-// parameter.
-// Id is released and related links are deleted.
+// DeleteWrp removes the object referenced by the wrapper from the database. Once deleted,
+// its ID is freed and any related links are cleared.
 func DeleteWrp[T any](objWrp KVWrapper[T]) error {
 	return Delete[T](objWrp.db, objWrp.key.id)
 }
 
-// DeepDelete the object determined with the Id and the tableName induced by the T
-// parameter and all object directly connected.
+// DeepDelete removes an object and all recursively linked objects in a single operation.
+// Use this if you need to purge an object along with all its connections.
+//
+// Possible Error:
+//   - ErrInvalidId: If the specified ID is not recognized.
 func DeepDelete[T any](db *KVStoreManager, id string) error {
 	return db.DeepDelete(NewTableKey[T]().SetId(id))
 }
 
-// DeepDeleteWrp the object determined with the Id and the tableName induced by the T
-// parameter and all object directly connected.
+// DeepDeleteWrp removes the object in the wrapper and all recursively linked objects.
 func DeepDeleteWrp[T any](objWrp KVWrapper[T]) error {
 	return DeepDelete[T](objWrp.db, objWrp.key.id)
 }
 
-// Exist return true if the object determined with the Id and the tableName induced by the
-// T parameter exist in db.
+// Exist checks if an object with the given ID is present in the database.
+// Returns true if found, false otherwise.
 func Exist[T any](db *KVStoreManager, id string) bool {
 	return db.Exist(NewTableKey[T]().SetId(id))
 }
 
-// ExistWrp return true if the object determines with the Id and the tableName induced by
-// the T parameter exist in db.
+// ExistWrp is the wrapper-based version of Exist, checking if the wrapped object
+// exists in the database.
 func ExistWrp[T any](objWrp KVWrapper[T]) bool {
 	return Exist[T](objWrp.db, objWrp.key.id)
 }
 
-// Count return the count of objects in the table based on the tableName induced by the T
-// parameter.
+// Count returns the total number of objects for the type T stored in the database.
 func Count[T any](db *KVStoreManager) int {
 	return db.Count(NewTableKey[T]())
 }
 
-// Foreach iterating on the table based on the tableName induced by the T parameter
-// and execute the do function on each value.
+// Foreach iterates over all objects of type T in the database, calling the provided
+// function for each item. The do callback supplies both the key and the typed value.
 func Foreach[T any](db *KVStoreManager, do func(key IKey, value *T)) {
 	db.Foreach(NewTableKey[T](), func(key *TableKey, value *any) {
 		t := (*value).(T)
@@ -131,8 +155,9 @@ func Foreach[T any](db *KVStoreManager, do func(key IKey, value *T)) {
 	})
 }
 
-// FindFirst iterate on the table based on the tableName induced by the T parameter and execute the
-// predicate function on each value until it return true value: the current value is returned.
+// FindFirst iterates through all objects of type T, invoking the predicate function
+// until it matches (returns true). The matching item is returned as a KVWrapper.
+// If no match is found, returns an empty wrapper.
 func FindFirst[T any](
 	db *KVStoreManager,
 	predicate func(key *TableKey, value *T) bool,
@@ -155,9 +180,8 @@ func FindFirst[T any](
 	return NewKVWrapper(db, tableKey, &resultValueAsT)
 }
 
-// FindAll iterate on the table based on the tableName induced by the T parameter and
-// execute the predicate function on each value. All values matching the predicate
-// are returned.
+// FindAll collects all objects of type T matching the predicate. Each result
+// is returned as a KVWrapper for further manipulation or inspection.
 func FindAll[T any](
 	db *KVStoreManager,
 	predicate func(key *TableKey, value *T) bool,
@@ -185,17 +209,17 @@ func FindAll[T any](
 
 //region Links
 
-// Link add a link between s object and all targets objects.
-// The biDirectional attribute determines if for target is also connected to s:
+// Link creates one or more links from the Current object to one or more Target objects.
+// If biDirectional is true, the link is also established in reverse.
 //
-//		 biDirectional == false: s -> t
-//
-//		 biDirectional == true:  s -> t
-//	                          s <- t
-func Link[C any, T any](
-	current KVWrapper[C],
+// Possible Errors:
+//   - ErrInvalidId: If the current or any target ID is not recognized in the database.
+//   - ErrSelfBind: If Current and Target refer to the same object.
+//   - ErrFailedToSet: If the underlying driver fails to record the link.
+func Link[Current any, Target any](
+	current KVWrapper[Current],
 	biDirectional bool,
-	targets ...KVWrapper[T],
+	targets ...KVWrapper[Target],
 ) error {
 
 	if !ExistWrp(current) {
@@ -203,8 +227,8 @@ func Link[C any, T any](
 	}
 
 	for _, target := range targets {
-		exist := current.db.Exist(target.key)
 
+		exist := current.db.Exist(target.key)
 		if !exist {
 			return ErrInvalidId
 		}
@@ -227,8 +251,12 @@ func Link[C any, T any](
 	return nil
 }
 
-// LinkNew same as Link but take any array and insert them in the db,
-// then return the resulting wrapping.
+// LinkNew works like Link, but first inserts each provided target object into the database,
+// then creates the links.
+// Returns a collection of wrappers for the newly inserted and linked target objects.
+//
+// Errors encountered during Insert or linking are silently skipped for individual targets.
+// For instance, if inserting a target fails, that target is not linked.
 func LinkNew[Current any, Target any](
 	current KVWrapper[Current],
 	biDirectional bool,
@@ -245,6 +273,7 @@ func LinkNew[Current any, Target any](
 		object := any(*target)
 		tableKey, err := current.db.Insert(&object)
 		if err != nil {
+			// Skip if unable to insert
 			continue
 		}
 
@@ -260,8 +289,10 @@ func LinkNew[Current any, Target any](
 // TODO: Consider implementing a cardinality feature to
 //  manage the number of links or constraints on relationships.
 
-// AllFromLink returned all objects, with the tableName induced by T, connected to the S object.
-func AllFromLink[Current any, Target any](
+// CollectLinked retrieves all objects of type Target
+// that are linked from a Current object with the provided ID.
+// This is helpful for exploring graph or relational data.
+func CollectLinked[Current any, Target any](
 	db *KVStoreManager,
 	currentId string,
 ) []KVWrapper[Target] {
@@ -275,10 +306,8 @@ func AllFromLink[Current any, Target any](
 
 		if linkKey.currentTableKey.Equals(tableKey) &&
 			linkKey.targetTableKey.name == targetTableName {
-
 			object, _ := db.Get(linkKey.targetTableKey)
 			value := (*object).(Target)
-
 			targetsWrp = append(
 				targetsWrp,
 				NewKVWrapper[Target](db, linkKey.targetTableKey, &value),
@@ -291,39 +320,38 @@ func AllFromLink[Current any, Target any](
 	return targetsWrp
 }
 
-// AllFromLinkWrp returned all objects, with the tableName induced by T, connected to the S object.
-func AllFromLinkWrp[Current any, Target any](
+// CollectLinkedWrp is a wrapper-based variant of CollectLinked, fetching all linked Target objects
+// from the Current object’s wrapper.
+func CollectLinkedWrp[Current any, Target any](
 	current KVWrapper[Current],
 ) []KVWrapper[Target] {
-	return AllFromLink[Current, Target](current.db, current.key.id)
+	return CollectLinked[Current, Target](current.db, current.key.id)
 }
 
-// RemoveLink remove all link between s and t object. Return true if links s->t are deleted (is
-// at least the link created when isBidirectional == false).
-func RemoveLink[S any, T any](db KVDriver, idOfS string, idOfT string) bool {
+// Unlink removes any links between two objects, both the forward link (Current -> Target)
+// and the backward link (Target -> Current), if it exists. Returns true if at least one link
+// was successfully removed.
+func Unlink[Current any, Target any](db KVDriver, idOfC string, idOfT string) bool {
+	currentTableKey := NewTableKey[Current]().SetId(idOfC)
+	targetCurrentKey := NewTableKey[Target]().SetId(idOfT)
 
-	currentTableKey := NewTableKey[S]().SetId(idOfS)
-	targetCurrentKey := NewTableKey[T]().SetId(idOfT)
-
-	db.RawDelete(NewLinkKey(targetCurrentKey, currentTableKey))
-
-	return db.RawDelete(NewLinkKey(currentTableKey, targetCurrentKey))
+	return db.RawDelete(NewLinkKey(targetCurrentKey, currentTableKey)) ||
+		db.RawDelete(NewLinkKey(currentTableKey, targetCurrentKey))
 }
 
-// RemoveLinkWrp remove all link between s and t object. Return true if links s->t are deleted (is
-// at least the link created when isBidirectional == false).
-func RemoveLinkWrp[Current any, Target any](
+// UnlinkWrp does the same as Unlink, but with wrapper types for convenience.
+func UnlinkWrp[Current any, Target any](
 	current KVWrapper[Current],
 	target KVWrapper[Target],
 ) bool {
-	return RemoveLink[Current, Target](current.db, current.key.id, target.key.id)
+	return Unlink[Current, Target](current.db, current.key.id, target.key.id)
 }
 
-// RemoveAllTableLink remove all link between t object and object having the S tableName.
-func RemoveAllTableLink[Current any, Target any](db KVDriver, id string) {
+// UnlinkAllTarget removes all links between an object identified by id
+// and objects in the specified Target table.
+func UnlinkAllTarget[Current any, Target any](db KVDriver, id string) {
 
 	db.RawIterKey(NewProtoLinkKey(), func(key IKey) (stop bool) {
-
 		linkKey := key.(*LinkKey)
 		currentTableKey := NewTableKey[Current]().SetId(id)
 		targetTableName := NewTableKey[Target]().name
@@ -332,7 +360,6 @@ func RemoveAllTableLink[Current any, Target any](db KVDriver, id string) {
 			linkKey.targetTableKey.name == targetTableName ||
 			linkKey.targetTableKey.Equals(currentTableKey) &&
 				linkKey.currentTableKey.name == targetTableName {
-
 			db.RawDelete(linkKey)
 		}
 
@@ -340,22 +367,21 @@ func RemoveAllTableLink[Current any, Target any](db KVDriver, id string) {
 	})
 }
 
-// RemoveAllTableLinkWrp remove all link between t object and object having the S tableName.
-func RemoveAllTableLinkWrp[Current any, Target any](current KVWrapper[Current]) {
-	RemoveAllTableLink[Current, Target](current.db, current.key.id)
+// UnlinkAllTargetWrp is the wrapper-based counterpart of UnlinkAllTarget.
+func UnlinkAllTargetWrp[Current any, Target any](current KVWrapper[Current]) {
+	UnlinkAllTarget[Current, Target](current.db, current.key.id)
 }
 
-// RemoveAllLink remove all link connected to this object.
-func RemoveAllLink[Current any](db KVDriver, id string) {
+// UnlinkAll removes every link connected to the specified object, effectively
+// disconnecting it from all related records.
+func UnlinkAll[Current any](db KVDriver, id string) {
 
 	db.RawIterKey(NewProtoLinkKey(), func(key IKey) (stop bool) {
-
 		linkKey := key.(*LinkKey)
 		currentTableKey := NewTableKey[Current]().SetId(id)
 
 		if linkKey.currentTableKey.Equals(currentTableKey) ||
 			linkKey.targetTableKey.Equals(currentTableKey) {
-
 			db.RawDelete(linkKey)
 		}
 
@@ -363,22 +389,20 @@ func RemoveAllLink[Current any](db KVDriver, id string) {
 	})
 }
 
-// RemoveAllLinkWrp remove all link connected to this object.
-func RemoveAllLinkWrp[Current any](current KVWrapper[Current]) {
-	RemoveAllLink[Current](current.db, current.key.id)
+// UnlinkAllWrp is a wrapper-based version of UnlinkAll, removing all links
+// from the object in the provided wrapper.
+func UnlinkAllWrp[Current any](current KVWrapper[Current]) {
+	UnlinkAll[Current](current.db, current.key.id)
 }
 
-// TODO re-organize all public methods. Why these specific methods are in object.go file?
-// TODO there is a function to iterate through a table without value retrieving?
-// TODO make the Visit method test. Maybe rename it with "iter" like other one
-
-// Visit iterate on all connected objects and returns all ids. Prevent the value recovering.
-func Visit[Current any](db KVDriver, currentId string) []*TableKey {
+// CollectAllLinkedKey scans all linked objects
+// (both inbound and outbound links)
+// of a given object and returns their IDs without retrieving the actual values.
+func CollectAllLinkedKey[Current any](db KVDriver, currentId string) []*TableKey {
 
 	var tableKeys []*TableKey
 
 	db.RawIterKey(NewProtoLinkKey(), func(key IKey) (stop bool) {
-
 		linkKey := key.(*LinkKey)
 		currentTableKey := NewTableKey[Current]().SetId(currentId)
 
@@ -394,10 +418,10 @@ func Visit[Current any](db KVDriver, currentId string) []*TableKey {
 	return tableKeys
 }
 
-// VisitWrp iterate on all connected objects and return all ids.
-// Prevent the value from being retrieved.
-func VisitWrp[Current any](s *KVWrapper[Current]) []*TableKey {
-	return Visit[Current](s.db, s.key.id)
+// CollectAllLinkedKeyWrp is the wrapper-based variant of CollectAllLinkedKey,
+// returning the IDs of all linked objects.
+func CollectAllLinkedKeyWrp[Current any](s *KVWrapper[Current]) []*TableKey {
+	return CollectAllLinkedKey[Current](s.db, s.key.id)
 }
 
 //endregion
@@ -405,15 +429,15 @@ func VisitWrp[Current any](s *KVWrapper[Current]) []*TableKey {
 //region Collections
 
 // Where ; this function considers a collection and the connected collection induced by
-// Link (probably used in a same way for each element of the collection).
+// Link (probably used in the same way for each element of the collection).
 //
 // For each object in the collection the predicate is applied with the current object and all
-// connected object given by an AllFromLink operation. If the predicate returns true,
-// the current object is retained.
+// connected objects given by a CollectLinked operation.
+// If the predicate returns true, the current object is retained.
 //
-// If the option firstOnly is set to true, only the first result of AllFromLink is retained.
+// If the option firstOnly is set to true, only the first result of CollectLinked is retained.
 //
-// The result of unlink can be nil, and the predicate function must manage this case.
+// The result of unlinking can be nil, and the predicate function must manage this case.
 func Where[T any, K any](
 	firstOnly bool,
 	collection *Collection[T],
@@ -422,7 +446,7 @@ func Where[T any, K any](
 
 	var list []KVWrapper[T]
 	for _, objCol1 := range collection.objects {
-		objectsWrp := AllFromLink[T, K](objCol1.db, objCol1.key.id)
+		objectsWrp := CollectLinked[T, K](objCol1.db, objCol1.key.id)
 		if len(objectsWrp) > 1 && firstOnly {
 			objectsWrp = objectsWrp[1:]
 		}

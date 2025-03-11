@@ -290,12 +290,12 @@ func TestLink(t *testing.T) {
 		t.Errorf("Link failed: expected %v, got %v", nil, err)
 	}
 
-	allConnectedToTarget := AllFromLink[AnotherType, SimpleType](db, targets[0].Key().Id())
+	allConnectedToTarget := CollectLinked[AnotherType, SimpleType](db, targets[0].Key().Id())
 	if len(allConnectedToTarget) != 0 {
 		t.Errorf("Expecting %v connected to target, got %d", 0, len(allConnectedToTarget))
 	}
 
-	allConnectedToCurrent := AllFromLink[SimpleType, AnotherType](db, current.Key().Id())
+	allConnectedToCurrent := CollectLinked[SimpleType, AnotherType](db, current.Key().Id())
 	if len(allConnectedToCurrent) != 2 {
 		t.Errorf("Expecting %v connected to target, got %d", 2, len(allConnectedToCurrent))
 		t.FailNow()
@@ -308,7 +308,7 @@ func TestLink(t *testing.T) {
 				return Equals(o1.Value(), o2.Value())
 			},
 		) {
-			t.Errorf("AllFromLink failed: expected %v", expectedObject)
+			t.Errorf("CollectLinked failed: expected %v", expectedObject)
 		}
 	}
 }
@@ -330,7 +330,7 @@ func TestLink_BiDirectional(t *testing.T) {
 		t.Errorf("Link failed: expected %v, got %v", nil, err)
 	}
 
-	allConnectedToTarget := AllFromLink[AnotherType, SimpleType](db, targets[0].Key().Id())
+	allConnectedToTarget := CollectLinked[AnotherType, SimpleType](db, targets[0].Key().Id())
 	if len(allConnectedToTarget) != 1 {
 		t.Errorf("Expecting %v connected to target, got %d", 1, len(allConnectedToTarget))
 	}
@@ -338,7 +338,7 @@ func TestLink_BiDirectional(t *testing.T) {
 		t.Errorf("Link failed: expected %v, got %v", current.Value(), allConnectedToTarget[0].Value())
 	}
 
-	allConnectedToCurrent := AllFromLink[SimpleType, AnotherType](db, current.Key().Id())
+	allConnectedToCurrent := CollectLinked[SimpleType, AnotherType](db, current.Key().Id())
 	if len(allConnectedToCurrent) != 2 {
 		t.Errorf("Expecting %v connected to target, got %d", 2, len(allConnectedToCurrent))
 		t.FailNow()
@@ -351,7 +351,7 @@ func TestLink_BiDirectional(t *testing.T) {
 				return Equals(o1.Value(), o2.Value())
 			},
 		) {
-			t.Errorf("AllFromLink failed: expected %v", expectedObject)
+			t.Errorf("CollectLinked failed: expected %v", expectedObject)
 		}
 	}
 }
@@ -448,11 +448,11 @@ func TestAllFromLink(t *testing.T) {
 	}
 
 	// Act
-	simpleTypeConnectedToCurrent := AllFromLink[AnotherType, SimpleType](db, current.Key().Id())
+	simpleTypeConnectedToCurrent := CollectLinked[AnotherType, SimpleType](db, current.Key().Id())
 
 	// Assert
 	if len(expectedConnected) != len(simpleTypeConnectedToCurrent) {
-		t.Errorf("AllFromLink failed: expected %v, got %v", len(expectedConnected), len(simpleTypeConnectedToCurrent))
+		t.Errorf("CollectLinked failed: expected %v, got %v", len(expectedConnected), len(simpleTypeConnectedToCurrent))
 	}
 	for _, expectedObject := range expectedConnected {
 		if !RemoveWithPredicate(
@@ -462,7 +462,7 @@ func TestAllFromLink(t *testing.T) {
 				return Equals(o1.Value().Val, o2.Value().Val)
 			},
 		) {
-			t.Errorf("AllFromLink failed: expected %v, got %v", expectedObject, simpleTypeConnectedToCurrent)
+			t.Errorf("CollectLinked failed: expected %v, got %v", expectedObject, simpleTypeConnectedToCurrent)
 		}
 	}
 }
@@ -475,13 +475,13 @@ func TestRemoveLink(t *testing.T) {
 	target := LinkNew(current, false, NewSimpleType("t1", "t2", 1))[0]
 
 	// Act
-	isRemoved := RemoveLink[AnotherType, SimpleType](db, current.Key().Id(), target.Key().Id())
+	isRemoved := Unlink[AnotherType, SimpleType](db, current.Key().Id(), target.Key().Id())
 
 	// Assert
 	if !isRemoved {
 		t.Errorf("Remove failed: expected %v, got %v", true, isRemoved)
 	}
-	if len(AllFromLink[AnotherType, SimpleType](db, current.Key().Id())) != 0 {
+	if len(CollectLinked[AnotherType, SimpleType](db, current.Key().Id())) != 0 {
 		t.Error("Expecting no linked object")
 	}
 }
@@ -503,13 +503,13 @@ func TestRemoveAllTableLink(t *testing.T) {
 	}
 
 	// Act
-	RemoveAllTableLink[AnotherType, SimpleType](db, current.Key().Id())
+	UnlinkAllTarget[AnotherType, SimpleType](db, current.Key().Id())
 
 	// Assert
-	if len(AllFromLink[AnotherType, SimpleType](db, current.Key().Id())) != 0 {
+	if len(CollectLinked[AnotherType, SimpleType](db, current.Key().Id())) != 0 {
 		t.Error("Expecting no linked object")
 	}
-	if len(AllFromLink[AnotherType, AnotherType](db, current.Key().Id())) != 4 {
+	if len(CollectLinked[AnotherType, AnotherType](db, current.Key().Id())) != 4 {
 		t.Error("Expecting 4 linked object")
 	}
 }
@@ -531,13 +531,13 @@ func TestRemoveAllLink(t *testing.T) {
 	}
 
 	// Act
-	RemoveAllLink[AnotherType](db, current.Key().Id())
+	UnlinkAll[AnotherType](db, current.Key().Id())
 
 	// Assert
-	if len(AllFromLink[AnotherType, SimpleType](db, current.Key().Id())) != 0 {
+	if len(CollectLinked[AnotherType, SimpleType](db, current.Key().Id())) != 0 {
 		t.Error("Expecting no linked object")
 	}
-	if len(AllFromLink[AnotherType, AnotherType](db, current.Key().Id())) != 0 {
+	if len(CollectLinked[AnotherType, AnotherType](db, current.Key().Id())) != 0 {
 		t.Error("Expecting no linked object")
 	}
 }
