@@ -487,25 +487,20 @@ func (c *Collection[T]) Filter(
 
 //region Triggers
 
-// AddBeforeTrigger register a new trigger with the given parameter and table name
-// inferred from the T parameter.
-// The action ran before the targeted operation.
+// AddBeforeTrigger registers a new trigger that fires before the specified operations
+// for the table derived from the type parameter T. The action function returns a boolean
+// value indicating whether the operation should continue.
 //
 // Parameters:
+//   - db: The KVStoreManager instance managing the triggers.
+//   - id: A unique identifier for the trigger within the table scope.
+//   - operations: The operations that will cause this trigger to fire.
+//   - action: A function executed before the operation. If this function returns false,
+//     the operation is canceled.
 //
-// Id: a string that will be used as the identifier of the new trigger: it could be a
-// description but should be unique relatively to the table name.
-//
-// operations: a value of type Operation defining the operations that will trigger the
-// action.
-//
-// action: a function that will be executed when the trigger fires with the Id and
-// value of the current operation.
-// The return value, an error,
-// is used as a condition for performing the targeted operation.
-//
-// Returns ErrDuplicateTrigger if a trigger with the same Id already exists in the
-// provided database.
+// Possible Errors:
+//   - ErrDuplicateTrigger: If a trigger with the same identifier is already registered
+//     for this table.
 func AddBeforeTrigger[T any](
 	db *KVStoreManager,
 	id string,
@@ -525,6 +520,7 @@ func AddBeforeTrigger[T any](
 	}
 
 	db.m.Lock()
+	defer db.m.Unlock()
 
 	index := indexOf(triggerToBeAdded, db.triggers)
 	if index != -1 {
@@ -533,28 +529,22 @@ func AddBeforeTrigger[T any](
 
 	db.triggers = append(db.triggers, triggerToBeAdded)
 
-	db.m.Unlock()
-
 	return nil
 }
 
-// AddAfterTrigger register a new trigger with the given parameter and table name
-// inferred from the T parameter.
-// The action ran after the targeted operation.
+// AddAfterTrigger registers a new trigger that fires after the specified operations
+// for the table derived from the type parameter T. The action function is invoked with
+// the current operation details.
 //
 // Parameters:
+//   - db: The KVStoreManager instance managing the triggers.
+//   - id: A unique identifier for the trigger within the table scope.
+//   - operations: The operations that will cause this trigger to fire.
+//   - action: A function executed after the operation completes.
 //
-// Id: a string that will be used as the identifier of the new trigger: it could be a
-// description but should be unique relatively to the table name.
-//
-// operations: a value of type Operation defining the operations that will trigger the
-// action.
-//
-// action: a function that will be executed when the trigger fires with the Id and
-// value of the current operation.
-//
-// Returns ErrDuplicateTrigger if a trigger with the same Id already exists in the
-// provided database.
+// Possible Errors:
+//   - ErrDuplicateTrigger: If a trigger with the same identifier is already registered
+//     for this table.
 func AddAfterTrigger[T any](
 	db *KVStoreManager,
 	id string,
@@ -574,21 +564,27 @@ func AddAfterTrigger[T any](
 	}
 
 	db.m.Lock()
+	defer db.m.Unlock()
 
 	if indexOf(triggerToBeAdded, db.triggers) != -1 {
 		return ErrDuplicateTrigger
 	}
-	db.triggers = append(db.triggers, triggerToBeAdded)
 
-	db.m.Unlock()
+	db.triggers = append(db.triggers, triggerToBeAdded)
 
 	return nil
 }
 
-// DeleteTrigger deletes a trigger from registered triggers based on the table name
-// inferred by the T parameter and the Id.
+// DeleteTrigger removes a previously registered trigger from the table derived from the
+// type parameter T. If a matching trigger cannot be found, it returns ErrInexistantTrigger.
 //
-// If the trigger is not present, it returns ErrInexistantTrigger.
+// Parameters:
+//   - db: The KVStoreManager that holds the registered triggers.
+//   - id: The unique identifier for the trigger to be removed.
+//
+// Possible Errors:
+//   - ErrInexistantTrigger: If no trigger matches the supplied identifier in the
+//     corresponding table.
 func DeleteTrigger[T any](db *KVStoreManager, id string) error {
 
 	triggerToBeRemoved := trigger{
@@ -597,6 +593,7 @@ func DeleteTrigger[T any](db *KVStoreManager, id string) error {
 	}
 
 	db.m.Lock()
+	defer db.m.Unlock()
 
 	index := indexOf(triggerToBeRemoved, db.triggers)
 	if index == -1 {
@@ -604,8 +601,6 @@ func DeleteTrigger[T any](db *KVStoreManager, id string) error {
 	}
 
 	db.triggers = append(db.triggers[:index], db.triggers[index+1:]...)
-
-	db.m.Unlock()
 
 	return nil
 }

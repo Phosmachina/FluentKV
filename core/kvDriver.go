@@ -24,8 +24,8 @@ type KVDriver interface {
 
 	// RawIterKey scans the storage for items whose key begins with the prefix defined
 	// by the given key, then invokes the provided action function on each matching key.
-	// If action returns true, iteration stops immediately. This method does not fetch values,
-	// only keys.
+	// If the action returns true, iteration stops immediately.
+	// This method does not fetch values, only keys.
 	RawIterKey(key IKey, action func(key IKey) (stop bool))
 
 	// RawIterKV behaves like RawIterKey but also retrieves and passes the associated values
